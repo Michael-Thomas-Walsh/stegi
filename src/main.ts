@@ -1,3 +1,7 @@
+// TypeScript = BEHAVIOR. Building services: what happens when you click —
+// how the page ACTS. (TypeScript is JavaScript with type-checking: it
+// catches mistakes before they happen.)
+//
 // Hello-world: click the button, stack a floor, watch your tower grow.
 // Delete all of this once you start your real project (see docs/PRD.md).
 

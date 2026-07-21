@@ -1,3 +1,7 @@
+/* CSS = APPEARANCE. Materials & finishes: colors, spacing, type — how the
+   structure in index.html looks. Change a color here, save, watch the
+   browser update. */
+
 * {
   box-sizing: border-box;
   margin: 0;
