@@ -29,7 +29,7 @@ The whole app is three files — three disciplines, one building:
 | Thing | What it is |
 |---|---|
 | `index.html` + `src/` | **your app — the only things you edit** |
-| `docs/` | your PRD, sketch, and ideas — documents, not code |
+| `docs/` | the documentation system: your plan (PRD, user stories, a sketch image) and the app's living spec (architecture, frontend) — see `AGENTS.md` |
 | `package.json` | the project's ID card: its name + which tools it needs |
 | `package-lock.json` | exact versions of those tools (auto-managed, never edit) |
 | `node_modules/` | appears after `npm install` — the downloaded tools themselves. Never open it, never edit it. |
@@ -38,9 +38,10 @@ The whole app is three files — three disciplines, one building:
 ## Then build something real
 
 1. Open this folder in your AI coding tool (Claude Code, Cline, Copilot…).
-2. Say: **"Read AGENTS.md, then help me fill in docs/PRD.md."**
-3. Pick a project from `docs/IDEAS.md` (or bring your own idea).
-4. Sketch it in `docs/SKETCH.md`, then build it step by step with your agent.
+2. Say: **"Read AGENTS.md, then help me fill in docs/PRD.md and docs/user-stories.md."**
+3. Sketch your UI on paper, photograph it, drop the image into `docs/`.
+4. Let the agent translate the plan into `docs/architecture.md` +
+   `docs/frontend.md`, then build it step by step.
 
 The agent knows the rules — they're in [AGENTS.md](./AGENTS.md). The short
 version: TypeScript + HTML + CSS only, no frameworks, no API keys, PRD and

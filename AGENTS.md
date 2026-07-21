@@ -12,28 +12,50 @@ plain language, one step at a time.
   packages** unless `docs/PRD.md` explicitly says so.
 - **No API keys, no accounts, no databases.** Everything runs in the browser.
 
+## The documentation system
+
+`docs/` has two sides. Keep them apart:
+
+**The plan — written by the student (you help):**
+
+| File | What it is |
+|---|---|
+| `docs/PRD.md` | the Product Requirements Document: what we're building, for whom, which 3 features max, what's explicitly out. A PRD is the plan from the USER's point of view — no technology in it. |
+| `docs/user-stories.md` | who does what with the app and why, one line each |
+| a sketch image in `docs/` | a photo of a paper sketch (or any image) showing the UI and how it should work. The sketch is an image, not a text file. |
+
+**The app — written and maintained by YOU, the agent:**
+
+| File | What it is |
+|---|---|
+| `docs/architecture.md` | how the app actually works: files, data flow, decisions |
+| `docs/frontend.md` | the frontend style: layout, colors, interactions |
+
+Both start empty. Once the PRD is agreed, translate it into these two
+files, then build. **Every time the app changes, update them in the same
+step** — they must always describe the app as it is, not as it was.
+This is a beginner project: keep both files simple and understandable.
+
 ## The workflow (always in this order)
 
-1. **PRD first.** Before writing any code, help the student fill in
-   `docs/PRD.md` — what are we building, for whom, which 3 features max.
-   Ask them questions, keep it short.
-2. **Sketch second.** A rough wireframe in `docs/SKETCH.md` (ASCII is fine)
-   or a photo of a paper sketch dropped into `docs/`.
-3. **Build in tiny steps.** One small visible change at a time. After every
+1. **PRD first.** Help the student fill in `docs/PRD.md` and
+   `docs/user-stories.md`. Ask them questions, keep it short.
+2. **Sketch second.** The student puts a sketch image into `docs/`.
+3. **Translate.** Turn the PRD + sketch into `docs/architecture.md` and
+   `docs/frontend.md` — short and concrete.
+4. **Build in tiny steps.** One small visible change at a time. After every
    step, tell the student to look at the browser and confirm it looks right
-   before you continue.
-4. **When stuck, simplify.** Cut features, never add complexity to fix a
+   before you continue. Keep architecture.md / frontend.md in sync.
+5. **When stuck, simplify.** Cut features, never add complexity to fix a
    problem.
 
 ## How this repo is organized
 
 ```
-index.html      the page
-src/main.ts     the code
-src/style.css   the styles
-docs/PRD.md     what we're building (fill in before coding)
-docs/SKETCH.md  what it should look like
-docs/IDEAS.md   six starter project ideas to pick from
+index.html      the page (structure)
+src/main.ts     the code (behavior)
+src/style.css   the styles (appearance)
+docs/           the documentation system described above
 ```
 
 Keep this structure. New code goes in `src/` (split into more files when one
