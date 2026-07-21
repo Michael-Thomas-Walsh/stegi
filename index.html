@@ -1,7 +1,7 @@
 <!doctype html>
-<!-- HTML = STRUCTURE. Two panes: a sidebar (controls + rooftop list) and a
-     map. How it LOOKS lives in src/style.css; what it DOES lives in
-     src/main.ts. -->
+
+<!-- HTML = STRUCTURE. The sidebar contains location/boundary controls and the
+     rooftop results; the map fills the remaining space. -->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -9,12 +9,43 @@
     <title>STÉGI — The Invisible City</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
+
   <body>
     <aside id="sidebar">
       <header>
         <h1>STÉGI</h1>
         <p class="subtitle">Rooftop greening for a cooler Athens</p>
       </header>
+
+      <section class="panel" aria-labelledby="location-heading">
+        <h2 id="location-heading">Find the site</h2>
+
+        <form id="address-form" class="input-row">
+          <label class="sr-only" for="address-search">Athens address</label>
+          <input
+            id="address-search"
+            type="search"
+            placeholder="Search an Athens address"
+            autocomplete="street-address"
+          />
+          <button id="address-go" type="submit">Go</button>
+        </form>
+
+        <div class="upload-row">
+          <input
+            id="boundary-file"
+            type="file"
+            accept=".zip,.geojson,.json,application/zip,application/geo+json,application/json"
+            hidden
+          />
+          <button id="upload-boundary" type="button">Upload boundary</button>
+        </div>
+
+        <p class="helper-text">
+          Upload one polygon as GeoJSON, or a ZIP containing the SHP, SHX, DBF
+          and PRJ files. Boundaries must be inside the Athens study area.
+        </p>
+      </section>
 
       <div id="controls">
         <button id="draw">Draw area</button>
@@ -23,8 +54,19 @@
         <button id="clear" disabled>Clear</button>
       </div>
 
-      <input id="search" type="search" placeholder="Filter: park / garden" disabled />
-      <p id="hint">Drag a box across the map to pick your neighbourhood.</p>
+      <input
+        id="search"
+        type="search"
+        placeholder="Filter: park / garden"
+        disabled
+      />
+
+      <p id="hint">Search for an address, upload a boundary, or draw an area.</p>
+
+      <section class="panel log-panel" aria-labelledby="log-heading">
+        <h2 id="log-heading">Project log</h2>
+        <div id="activity-log" role="log" aria-live="polite"></div>
+      </section>
 
       <div id="tally" hidden></div>
       <div id="detail" hidden></div>
