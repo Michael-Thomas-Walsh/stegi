@@ -24,10 +24,16 @@ The whole app is three files — three disciplines, one building:
 | `src/style.css` | CSS — **appearance** | materials & finishes: how it looks |
 | `src/main.ts` | TypeScript — **behavior** | building services: what happens on click |
 
-**Try it without installing anything:** open
-[stackblitz.com/github/Infrared-city/vibecoding-starter](https://stackblitz.com/github/Infrared-city/vibecoding-starter)
-— the project runs in your browser with an editor next to it. Change a color
-in `style.css` and watch it update live.
+## What are all these files?
+
+| Thing | What it is |
+|---|---|
+| `index.html` + `src/` | **your app — the only things you edit** |
+| `docs/` | your PRD, sketch, and ideas — documents, not code |
+| `package.json` | the project's ID card: its name + which tools it needs |
+| `package-lock.json` | exact versions of those tools (auto-managed, never edit) |
+| `node_modules/` | appears after `npm install` — the downloaded tools themselves. Never open it, never edit it. |
+| `tsconfig.json` | TypeScript settings (leave as is) |
 
 ## Then build something real
 
