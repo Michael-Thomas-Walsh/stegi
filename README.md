@@ -38,8 +38,8 @@ The whole app is three files — three disciplines, one building:
 ## Then build something real
 
 1. Open this folder in your AI coding tool (Claude Code, Cline, Copilot…).
-2. Say: **"Read AGENTS.md, then help me fill in docs/PRD.md and docs/user-stories.md."**
-3. Sketch your UI on paper, photograph it, drop the image into `docs/`.
+2. Say: **"Read AGENTS.md, then help me fill in docs/plan/PRD.md and docs/plan/user-stories.md."**
+3. Sketch your UI on paper, photograph it, drop the image into `docs/plan/`.
 4. Let the agent translate the plan into `docs/architecture.md` +
    `docs/frontend.md`, then build it step by step.
 

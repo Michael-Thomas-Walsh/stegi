@@ -3,7 +3,7 @@
 // catches mistakes before they happen.)
 //
 // Hello-world: click the button, stack a floor, watch your tower grow.
-// Delete all of this once you start your real project (see docs/PRD.md).
+// Delete all of this once you start your real project (see docs/plan/PRD.md).
 
 const tower = document.querySelector<HTMLDivElement>('#tower')!
 const counter = document.querySelector<HTMLParagraphElement>('#counter')!
