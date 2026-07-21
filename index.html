@@ -1,7 +1,7 @@
 <!doctype html>
 
-<!-- HTML = STRUCTURE. The sidebar contains location/boundary controls and the
-     rooftop results; the map fills the remaining space. -->
+<!-- HTML = STRUCTURE. Site finding, boundary creation and footprint detection
+     are deliberately separated into three clear stages. -->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -18,7 +18,10 @@
       </header>
 
       <section class="panel" aria-labelledby="location-heading">
-        <h2 id="location-heading">Find the site</h2>
+        <div class="panel-heading">
+          <span class="step-number">1</span>
+          <h2 id="location-heading">Find the site</h2>
+        </div>
 
         <form id="address-form" class="input-row">
           <label class="sr-only" for="address-search">Athens address</label>
@@ -31,37 +34,95 @@
           <button id="address-go" type="submit">Go</button>
         </form>
 
-        <div class="upload-row">
-          <input
-            id="boundary-file"
-            type="file"
-            accept=".zip,.geojson,.json,application/zip,application/geo+json,application/json"
-            hidden
-          />
-          <button id="upload-boundary" type="button">Upload boundary</button>
-        </div>
-
         <p class="helper-text">
-          Upload one polygon as GeoJSON, or a ZIP containing the SHP, SHX, DBF
-          and PRJ files. Boundaries must be inside the Athens study area.
+          Search for one address, postcode or landmark at a time. Results are
+          restricted to the Athens study area.
         </p>
       </section>
 
-      <div id="controls">
-        <button id="draw">Draw area</button>
-        <button id="detect" disabled>Detect rooftops</button>
-        <button id="toggle-view" disabled>Show: After</button>
-        <button id="clear" disabled>Clear</button>
-      </div>
+      <section class="panel" aria-labelledby="boundary-heading">
+        <div class="panel-heading">
+          <span class="step-number">2</span>
+          <h2 id="boundary-heading">Set the study boundary</h2>
+        </div>
 
-      <input
-        id="search"
-        type="search"
-        placeholder="Filter: park / garden"
-        disabled
-      />
+        <label class="field-label" for="boundary-method">Boundary method</label>
+        <select id="boundary-method">
+          <option value="rectangle">Draw a rectangle</option>
+          <option value="polygon">Draw a polygon</option>
+          <option value="shapefile">Upload a shapefile</option>
+        </select>
 
-      <p id="hint">Search for an address, upload a boundary, or draw an area.</p>
+        <div id="drawing-controls" class="control-stack">
+          <div class="button-row">
+            <button id="boundary-action" type="button">Draw rectangle</button>
+            <button id="finish-polygon" type="button" hidden>
+              Finish polygon
+            </button>
+            <button id="cancel-drawing" type="button" class="secondary" hidden>
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <div id="upload-controls" class="control-stack" hidden>
+          <label class="file-picker" for="boundary-file">
+            <span>Choose zipped shapefile</span>
+            <input id="boundary-file" type="file" accept=".zip,application/zip" />
+          </label>
+          <button id="load-boundary" type="button" disabled>
+            Load shapefile
+          </button>
+        </div>
+
+        <p id="boundary-help" class="helper-text">
+          Drag across the map to draw a rectangular study area.
+        </p>
+
+        <div class="boundary-confirmation">
+          <div>
+            <span class="field-label">Boundary status</span>
+            <strong id="boundary-status" class="status-pill">Not set</strong>
+          </div>
+          <div class="button-row compact">
+            <button id="confirm-boundary" type="button" disabled>
+              Confirm boundary
+            </button>
+            <button id="clear" type="button" class="secondary" disabled>
+              Clear
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="detect-heading">
+        <div class="panel-heading">
+          <span class="step-number">3</span>
+          <h2 id="detect-heading">Detect building footprints</h2>
+        </div>
+
+        <button id="detect" type="button" class="primary-action" disabled>
+          Detect footprints
+        </button>
+
+        <label class="sr-only" for="search">Filter rooftop proposals</label>
+        <input
+          id="search"
+          type="search"
+          placeholder="Filter: park / garden"
+          disabled
+        />
+
+        <button id="toggle-view" type="button" class="secondary" disabled>
+          Show: After
+        </button>
+
+        <p class="helper-text">
+          Detection is enabled only after the boundary above has been confirmed.
+        </p>
+      </section>
+
+      <p id="hint" role="status">Search for a site or set a study boundary.</p>
 
       <section class="panel log-panel" aria-labelledby="log-heading">
         <h2 id="log-heading">Project log</h2>

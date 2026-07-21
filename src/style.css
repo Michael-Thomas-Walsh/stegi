@@ -17,7 +17,7 @@ body {
 }
 
 #sidebar {
-  width: 360px;
+  width: 390px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -34,7 +34,7 @@ body {
 }
 
 #sidebar h2 {
-  font-size: 0.9rem;
+  font-size: 0.92rem;
 }
 
 .subtitle,
@@ -47,18 +47,35 @@ body {
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  padding: 0.7rem;
+  gap: 0.65rem;
+  padding: 0.75rem;
   border: 1px solid #d6d6d2;
   border-radius: 10px;
   background: #f7f7f5;
 }
 
-.input-row,
-.upload-row,
-#controls {
+.panel-heading {
   display: flex;
-  gap: 0.4rem;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.step-number {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border-radius: 50%;
+  background: #212121;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.input-row,
+.button-row {
+  display: flex;
+  gap: 0.45rem;
 }
 
 .input-row input {
@@ -66,16 +83,35 @@ body {
   flex: 1;
 }
 
-#controls {
+.button-row {
   flex-wrap: wrap;
+}
+
+.button-row.compact {
+  justify-content: flex-end;
+}
+
+.control-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+button,
+select,
+input[type='search'] {
+  min-height: 2.35rem;
+  border: 2px solid #212121;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #212121;
+  font: inherit;
 }
 
 button {
   padding: 0.45rem 0.7rem;
-  border: 2px solid #212121;
-  border-radius: 8px;
-  background: #ffffff;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -88,29 +124,108 @@ button:disabled {
   opacity: 0.4;
 }
 
-#detect {
+button.secondary {
+  border-color: #878783;
+  color: #444;
+}
+
+.primary-action,
+#confirm-boundary:not(:disabled) {
   background: #8bc34a;
 }
 
-#draw.active {
-  background: #212121;
-  color: #ffffff;
-}
-
-input[type='search'] {
-  padding: 0.5rem 0.65rem;
-  border: 2px solid #212121;
-  border-radius: 8px;
-  font: inherit;
-}
-
-#search {
+.primary-action {
   width: 100%;
+}
+
+select,
+input[type='search'] {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+}
+
+.field-label {
+  color: #555;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .helper-text {
   font-size: 0.74rem;
-  line-height: 1.35;
+  line-height: 1.4;
+}
+
+.file-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.65rem;
+  padding: 0.5rem;
+  border: 2px dashed #777;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #444;
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.file-picker:hover {
+  background: #ededeb;
+}
+
+.file-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.boundary-confirmation {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid #d6d6d2;
+}
+
+.boundary-confirmation > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.status-pill {
+  width: fit-content;
+  padding: 0.22rem 0.48rem;
+  border-radius: 999px;
+  background: #e7e7e3;
+  color: #555;
+  font-size: 0.74rem;
+}
+
+.status-pill.pending {
+  background: #fff0dc;
+  color: #8a4b12;
+}
+
+.status-pill.confirmed {
+  background: #dff0d0;
+  color: #245d17;
+}
+
+.status-pill.error {
+  background: #f7d9d7;
+  color: #8d211d;
+}
+
+#hint {
+  padding: 0.15rem 0.1rem;
+  line-height: 1.4;
 }
 
 .log-panel {
@@ -188,6 +303,7 @@ input[type='search'] {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  padding: 0;
   list-style: none;
 }
 
@@ -278,6 +394,10 @@ input[type='search'] {
   white-space: nowrap;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 @media (max-width: 760px) {
   body {
     flex-direction: column;
@@ -285,13 +405,21 @@ input[type='search'] {
 
   #sidebar {
     width: 100%;
-    max-height: 48vh;
+    max-height: 52vh;
     border-right: 0;
     border-bottom: 1px solid #c9c9c9;
   }
 
   #map {
     width: 100%;
-    height: 52vh;
+    height: 48vh;
+  }
+
+  .boundary-confirmation {
+    grid-template-columns: 1fr;
+  }
+
+  .button-row.compact {
+    justify-content: flex-start;
   }
 }

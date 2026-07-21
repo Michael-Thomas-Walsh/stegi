@@ -1,6 +1,5 @@
-// Everything to do with the Leaflet map: the base streets, selecting an area,
-// navigating to an address, displaying an uploaded boundary and drawing the
-// detected rooftops.
+// Leaflet map behaviour: address navigation, rectangle/polygon creation,
+// pending-boundary confirmation and rooftop rendering.
 
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -15,20 +14,33 @@ import {
 } from './athens'
 
 const START_ZOOM = 15
-const MIN_BOX_METRES = 40
+const MIN_BOUNDARY_DIAGONAL_METRES = 40
+
+export type DrawMode = 'rectangle' | 'polygon'
+export type BoundarySource = DrawMode | 'shapefile'
 
 let map: L.Map
-let boundaryShape: L.Polygon | null = null
+let confirmedBoundaryShape: L.Polygon | null = null
+let pendingBoundaryShape: L.Polygon | null = null
+let pendingBoundary: LatLngTuple[] = []
+let pendingBoundarySource: BoundarySource | null = null
+
 let rectPreview: L.Rectangle | null = null
+let polygonPreview: L.Polyline | null = null
+let polygonPoints: LatLngTuple[] = []
+let polygonVertexMarkers: L.CircleMarker[] = []
 let locationMarker: L.CircleMarker | null = null
 const roofLayers = new Map<number, L.Polygon>()
 
-let drawing = false
-let dragStart: L.LatLng | null = null
+let drawMode: DrawMode | null = null
+let rectangleStart: L.LatLng | null = null
 
-let onBoundaryDone: (() => void) | null = null
-let onBoundaryReject: ((message: string) => void) | null = null
-let onDrawModeChange: ((active: boolean) => void) | null = null
+let onBoundaryReadyCallback:
+  | ((source: BoundarySource, vertexCount: number) => void)
+  | null = null
+let onBoundaryConfirmedCallback: (() => void) | null = null
+let onBoundaryRejectCallback: ((message: string) => void) | null = null
+let onDrawModeChangeCallback: ((mode: DrawMode | null) => void) | null = null
 let onRoofClick: ((id: number) => void) | null = null
 
 export function createMap(containerId: string): L.Map {
@@ -48,79 +60,127 @@ export function createMap(containerId: string): L.Map {
     maxZoom: 19,
   }).addTo(map)
 
-  map.on('mousedown', (event: L.LeafletMouseEvent) => {
-    if (!drawing) return
-    dragStart = event.latlng
-  })
-
-  map.on('mousemove', (event: L.LeafletMouseEvent) => {
-    if (!drawing || !dragStart) return
-
-    const bounds = L.latLngBounds(dragStart, event.latlng)
-    if (rectPreview) {
-      rectPreview.setBounds(bounds)
-    } else {
-      rectPreview = L.rectangle(bounds, {
-        color: COLORS.SELECTED,
-        weight: 2,
-        dashArray: '4 4',
-        fillOpacity: 0,
-      }).addTo(map)
-    }
-  })
-
-  map.on('mouseup', (event: L.LeafletMouseEvent) => {
-    if (!drawing || !dragStart) return
-    finaliseBox(L.latLngBounds(dragStart, event.latlng))
-    dragStart = null
-  })
+  map.on('mousedown', handleRectangleStart)
+  map.on('mousemove', handleRectangleMove)
+  map.on('mouseup', handleRectangleEnd)
+  map.on('click', handlePolygonClick)
 
   return map
 }
 
-export function onBoundaryFinished(callback: () => void): void {
-  onBoundaryDone = callback
+export function onBoundaryReady(
+  callback: (source: BoundarySource, vertexCount: number) => void,
+): void {
+  onBoundaryReadyCallback = callback
+}
+
+export function onBoundaryConfirmed(callback: () => void): void {
+  onBoundaryConfirmedCallback = callback
 }
 
 export function onBoundaryRejected(
   callback: (message: string) => void,
 ): void {
-  onBoundaryReject = callback
+  onBoundaryRejectCallback = callback
 }
 
 export function onDrawModeChanged(
-  callback: (active: boolean) => void,
+  callback: (mode: DrawMode | null) => void,
 ): void {
-  onDrawModeChange = callback
+  onDrawModeChangeCallback = callback
 }
 
 export function onRooftopClick(callback: (id: number) => void): void {
   onRoofClick = callback
 }
 
-export function startDrawMode(): void {
-  drawing = true
+export function startRectangleMode(): void {
+  cancelDrawingMode()
+  removePendingBoundary()
+  drawMode = 'rectangle'
   map.dragging.disable()
   map.getContainer().style.cursor = 'crosshair'
-  onDrawModeChange?.(true)
+  onDrawModeChangeCallback?.(drawMode)
 }
 
-function endDrawMode(): void {
-  drawing = false
-  dragStart = null
+export function startPolygonMode(): void {
+  cancelDrawingMode()
+  removePendingBoundary()
+  drawMode = 'polygon'
+  polygonPoints = []
   map.dragging.enable()
-  map.getContainer().style.cursor = ''
-  onDrawModeChange?.(false)
+  map.getContainer().style.cursor = 'crosshair'
+  onDrawModeChangeCallback?.(drawMode)
 }
 
-function finaliseBox(bounds: L.LatLngBounds): void {
+export function finishPolygonMode(): boolean {
+  if (drawMode !== 'polygon') return false
+
+  if (polygonPoints.length < 3) {
+    onBoundaryRejectCallback?.(
+      'Add at least three polygon vertices before finishing the boundary.',
+    )
+    return false
+  }
+
+  const boundary = [...polygonPoints]
+  clearPolygonPreview()
+  prepareBoundary(boundary, 'polygon')
+  return true
+}
+
+export function cancelDrawingMode(): void {
+  rectangleStart = null
+  rectPreview?.remove()
+  rectPreview = null
+  clearPolygonPreview()
+
+  if (map) {
+    map.dragging.enable()
+    map.getContainer().style.cursor = ''
+  }
+
+  const previousMode = drawMode
+  drawMode = null
+  if (previousMode !== null) onDrawModeChangeCallback?.(null)
+}
+
+function handleRectangleStart(event: L.LeafletMouseEvent): void {
+  if (drawMode !== 'rectangle') return
+  rectangleStart = event.latlng
+}
+
+function handleRectangleMove(event: L.LeafletMouseEvent): void {
+  if (drawMode !== 'rectangle' || !rectangleStart) return
+
+  const bounds = L.latLngBounds(rectangleStart, event.latlng)
+  if (rectPreview) {
+    rectPreview.setBounds(bounds)
+  } else {
+    rectPreview = L.rectangle(bounds, {
+      color: '#c26b20',
+      weight: 2,
+      dashArray: '7 5',
+      fillColor: '#f2a65a',
+      fillOpacity: 0.08,
+    }).addTo(map)
+  }
+}
+
+function handleRectangleEnd(event: L.LeafletMouseEvent): void {
+  if (drawMode !== 'rectangle' || !rectangleStart) return
+
+  const bounds = L.latLngBounds(rectangleStart, event.latlng)
+  rectangleStart = null
+
   const diagonal = bounds
     .getNorthEast()
     .distanceTo(bounds.getSouthWest())
 
-  if (diagonal < MIN_BOX_METRES) {
+  if (diagonal < MIN_BOUNDARY_DIAGONAL_METRES) {
     rectPreview?.remove()
     rectPreview = null
+    onBoundaryRejectCallback?.('The rectangle is too small. Draw a larger area.')
     return
   }
 
@@ -133,37 +193,132 @@ function finaliseBox(bounds: L.LatLngBounds): void {
     [northEast.lat, southWest.lng],
   ]
 
+  rectPreview?.remove()
+  rectPreview = null
+  prepareBoundary(boundary, 'rectangle')
+}
+
+function handlePolygonClick(event: L.LeafletMouseEvent): void {
+  if (drawMode !== 'polygon') return
+
+  const point: LatLngTuple = [event.latlng.lat, event.latlng.lng]
+  polygonPoints.push(point)
+
+  const marker = L.circleMarker(point, {
+    radius: 4,
+    color: '#c26b20',
+    weight: 2,
+    fillColor: '#ffffff',
+    fillOpacity: 1,
+    interactive: false,
+  }).addTo(map)
+  polygonVertexMarkers.push(marker)
+
+  if (!polygonPreview) {
+    polygonPreview = L.polyline(polygonPoints, {
+      color: '#c26b20',
+      weight: 2,
+      dashArray: '7 5',
+    }).addTo(map)
+  } else {
+    polygonPreview.setLatLngs(polygonPoints)
+  }
+}
+
+function clearPolygonPreview(): void {
+  polygonPreview?.remove()
+  polygonPreview = null
+  polygonVertexMarkers.forEach((marker) => marker.remove())
+  polygonVertexMarkers = []
+  polygonPoints = []
+}
+
+function prepareBoundary(
+  boundary: LatLngTuple[],
+  source: BoundarySource,
+): void {
   const validationError = validateAthensBoundary(boundary)
   if (validationError) {
-    rectPreview?.remove()
-    rectPreview = null
-    onBoundaryReject?.(validationError)
+    cancelDrawingMode()
+    onBoundaryRejectCallback?.(validationError)
     return
   }
 
-  setBoundaryFromCoordinates(boundary)
-}
+  const bounds = L.latLngBounds(boundary)
+  const diagonal = bounds.getNorthEast().distanceTo(bounds.getSouthWest())
+  if (diagonal < MIN_BOUNDARY_DIAGONAL_METRES) {
+    cancelDrawingMode()
+    onBoundaryRejectCallback?.('The boundary is too small. Select a larger area.')
+    return
+  }
 
-export function setBoundaryFromCoordinates(
-  boundary: LatLngTuple[],
-): void {
-  const validationError = validateAthensBoundary(boundary)
-  if (validationError) throw new Error(validationError)
+  removeConfirmedBoundary()
+  removePendingBoundary()
+  clearRooftops()
+  state.boundary = []
 
-  rectPreview?.remove()
-  boundaryShape?.remove()
-  rectPreview = null
-
-  state.boundary = boundary
-  boundaryShape = L.polygon(boundary, {
-    color: COLORS.SELECTED,
+  pendingBoundary = boundary.map(([lat, lng]) => [lat, lng])
+  pendingBoundarySource = source
+  pendingBoundaryShape = L.polygon(pendingBoundary, {
+    color: '#c26b20',
     weight: 2,
-    fillOpacity: 0.04,
+    dashArray: '7 5',
+    fillColor: '#f2a65a',
+    fillOpacity: 0.08,
   }).addTo(map)
 
-  map.fitBounds(boundaryShape.getBounds(), { padding: [28, 28] })
-  endDrawMode()
-  onBoundaryDone?.()
+  map.fitBounds(pendingBoundaryShape.getBounds(), { padding: [28, 28] })
+  cancelDrawingMode()
+  onBoundaryReadyCallback?.(source, pendingBoundary.length)
+}
+
+export function setPendingBoundaryFromCoordinates(
+  boundary: LatLngTuple[],
+  source: BoundarySource = 'shapefile',
+): void {
+  cancelDrawingMode()
+  prepareBoundary(boundary, source)
+}
+
+export function confirmPendingBoundary(): boolean {
+  if (!pendingBoundaryShape || pendingBoundary.length < 3) return false
+
+  removeConfirmedBoundary()
+  state.boundary = pendingBoundary.map(([lat, lng]) => [lat, lng])
+  confirmedBoundaryShape = pendingBoundaryShape
+  confirmedBoundaryShape.setStyle({
+    color: COLORS.SELECTED,
+    weight: 3,
+    dashArray: '',
+    fillColor: COLORS.SELECTED,
+    fillOpacity: 0.04,
+  })
+
+  pendingBoundaryShape = null
+  pendingBoundary = []
+  pendingBoundarySource = null
+  onBoundaryConfirmedCallback?.()
+  return true
+}
+
+function removePendingBoundary(): void {
+  pendingBoundaryShape?.remove()
+  pendingBoundaryShape = null
+  pendingBoundary = []
+  pendingBoundarySource = null
+}
+
+function removeConfirmedBoundary(): void {
+  confirmedBoundaryShape?.remove()
+  confirmedBoundaryShape = null
+}
+
+export function clearStudyArea(): void {
+  cancelDrawingMode()
+  removePendingBoundary()
+  removeConfirmedBoundary()
+  clearRooftops()
+  state.boundary = []
 }
 
 export function goToLocation(
@@ -185,20 +340,18 @@ export function goToLocation(
 }
 
 export function clearMap(): void {
-  rectPreview?.remove()
-  boundaryShape?.remove()
+  clearStudyArea()
   locationMarker?.remove()
-  rectPreview = null
-  boundaryShape = null
   locationMarker = null
+}
 
+export function clearRooftops(): void {
   roofLayers.forEach((layer) => layer.remove())
   roofLayers.clear()
 }
 
 export function drawRooftops(rooftops: Rooftop[]): void {
-  roofLayers.forEach((layer) => layer.remove())
-  roofLayers.clear()
+  clearRooftops()
 
   for (const rooftop of rooftops) {
     const polygon = rooftop.polygon as GeoJSON.Feature<GeoJSON.Polygon>
@@ -213,9 +366,7 @@ export function drawRooftops(rooftops: Rooftop[]): void {
 }
 
 function roofStyle(rooftop: Rooftop): L.PathOptions {
-  const fill = state.showAfter
-    ? COLORS[rooftop.greenType]
-    : COLORS.BEFORE
+  const fill = state.showAfter ? COLORS[rooftop.greenType] : COLORS.BEFORE
   const selected = rooftop.id === state.selectedId
   const matches =
     state.filter === '' ||

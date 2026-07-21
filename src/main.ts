@@ -1,19 +1,26 @@
-// Entry point: wires the map, location inputs, project log, sidebar and the
-// detection pipeline together.
+// Entry point: wires the staged site → boundary → footprint workflow together.
 
 import { state } from './state'
 import {
+  cancelDrawingMode,
   clearMap,
+  clearStudyArea,
+  confirmPendingBoundary,
   createMap,
   drawRooftops,
+  finishPolygonMode,
   goToLocation,
-  onBoundaryFinished,
+  onBoundaryConfirmed,
+  onBoundaryReady,
   onBoundaryRejected,
   onDrawModeChanged,
   onRooftopClick,
   restyleRooftops,
-  setBoundaryFromCoordinates,
-  startDrawMode,
+  setPendingBoundaryFromCoordinates,
+  startPolygonMode,
+  startRectangleMode,
+  type BoundarySource,
+  type DrawMode,
 } from './map'
 import { fetchShapes } from './osm'
 import { buildRooftops } from './features'
@@ -28,24 +35,48 @@ import { initialiseLog, writeLog } from './log'
 createMap('map')
 initialiseLog('activity-log')
 
-const drawBtn = document.querySelector<HTMLButtonElement>('#draw')!
-const detectBtn = document.querySelector<HTMLButtonElement>('#detect')!
-const toggleBtn = document.querySelector<HTMLButtonElement>('#toggle-view')!
+const addressForm = document.querySelector<HTMLFormElement>('#address-form')!
+const addressInput = document.querySelector<HTMLInputElement>('#address-search')!
+const addressGoBtn = document.querySelector<HTMLButtonElement>('#address-go')!
+
+const methodSelect =
+  document.querySelector<HTMLSelectElement>('#boundary-method')!
+const drawingControls =
+  document.querySelector<HTMLDivElement>('#drawing-controls')!
+const uploadControls =
+  document.querySelector<HTMLDivElement>('#upload-controls')!
+const boundaryActionBtn =
+  document.querySelector<HTMLButtonElement>('#boundary-action')!
+const finishPolygonBtn =
+  document.querySelector<HTMLButtonElement>('#finish-polygon')!
+const cancelDrawingBtn =
+  document.querySelector<HTMLButtonElement>('#cancel-drawing')!
+const boundaryFileInput =
+  document.querySelector<HTMLInputElement>('#boundary-file')!
+const loadBoundaryBtn =
+  document.querySelector<HTMLButtonElement>('#load-boundary')!
+const confirmBoundaryBtn =
+  document.querySelector<HTMLButtonElement>('#confirm-boundary')!
 const clearBtn = document.querySelector<HTMLButtonElement>('#clear')!
+const boundaryHelp =
+  document.querySelector<HTMLParagraphElement>('#boundary-help')!
+const boundaryStatus =
+  document.querySelector<HTMLElement>('#boundary-status')!
+
+const detectBtn = document.querySelector<HTMLButtonElement>('#detect')!
+const toggleBtn =
+  document.querySelector<HTMLButtonElement>('#toggle-view')!
 const search = document.querySelector<HTMLInputElement>('#search')!
 const hint = document.querySelector<HTMLParagraphElement>('#hint')!
 
-const addressForm = document.querySelector<HTMLFormElement>('#address-form')!
-const addressInput =
-  document.querySelector<HTMLInputElement>('#address-search')!
-const addressGoBtn = document.querySelector<HTMLButtonElement>('#address-go')!
-const uploadBtn =
-  document.querySelector<HTMLButtonElement>('#upload-boundary')!
-const boundaryFileInput =
-  document.querySelector<HTMLInputElement>('#boundary-file')!
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'An unexpected error occurred.'
+}
+
+function sourceLabel(source: BoundarySource): string {
+  if (source === 'rectangle') return 'Rectangle'
+  if (source === 'polygon') return 'Polygon'
+  return 'Shapefile'
 }
 
 function selectRoof(id: number): void {
@@ -57,21 +88,70 @@ function selectRoof(id: number): void {
 onRooftopClick(selectRoof)
 onRooftopRowClick(selectRoof)
 
-function resetAll(): void {
-  clearMap()
-  state.boundary = []
+function resetAnalysis(): void {
   state.rooftops = []
   state.selectedId = null
   state.filter = ''
   state.showAfter = true
-
   search.value = ''
   search.disabled = true
   toggleBtn.textContent = 'Show: After'
   toggleBtn.disabled = true
+  renderSidebar()
+}
+
+function setBoundaryStatus(
+  text: string,
+  kind: 'neutral' | 'pending' | 'confirmed' | 'error' = 'neutral',
+): void {
+  boundaryStatus.textContent = text
+  boundaryStatus.className = `status-pill ${kind}`
+}
+
+function beginNewBoundary(): void {
+  clearStudyArea()
+  resetAnalysis()
+  confirmBoundaryBtn.disabled = true
+  detectBtn.disabled = true
+  clearBtn.disabled = false
+  setBoundaryStatus('In progress', 'pending')
+}
+
+function resetBoundaryWorkflow(): void {
+  clearStudyArea()
+  resetAnalysis()
+  confirmBoundaryBtn.disabled = true
   detectBtn.disabled = true
   clearBtn.disabled = true
-  renderSidebar()
+  boundaryFileInput.value = ''
+  loadBoundaryBtn.disabled = true
+  setBoundaryStatus('Not set')
+  hint.textContent = 'Set a study boundary using the controls above.'
+}
+
+function updateBoundaryMethodUI(): void {
+  const method = methodSelect.value
+  const isUpload = method === 'shapefile'
+
+  cancelDrawingMode()
+  drawingControls.hidden = isUpload
+  uploadControls.hidden = !isUpload
+  finishPolygonBtn.hidden = true
+  cancelDrawingBtn.hidden = true
+  boundaryActionBtn.disabled = false
+
+  if (method === 'rectangle') {
+    boundaryActionBtn.textContent = 'Draw rectangle'
+    boundaryHelp.textContent =
+      'Click “Draw rectangle”, then drag across the map. The boundary must remain inside Athens.'
+  } else if (method === 'polygon') {
+    boundaryActionBtn.textContent = 'Start polygon'
+    boundaryHelp.textContent =
+      'Click points around the site, then use “Finish polygon”. Add at least three vertices.'
+  } else {
+    boundaryHelp.textContent =
+      'Upload one ZIP containing SHP, SHX and DBF files. Include the PRJ file so coordinates can be transformed correctly.'
+  }
 }
 
 addressForm.addEventListener('submit', async (event) => {
@@ -90,7 +170,7 @@ addressForm.addEventListener('submit', async (event) => {
   try {
     const result = await geocodeAthensAddress(query)
     goToLocation(result.lat, result.lng, result.displayName)
-    hint.textContent = 'Address found. Draw or upload a study boundary.'
+    hint.textContent = 'Address found. Set the study boundary below.'
     writeLog(`Address found: ${result.displayName}`, 'success')
   } catch (error) {
     const message = errorMessage(error)
@@ -101,67 +181,119 @@ addressForm.addEventListener('submit', async (event) => {
   }
 })
 
-uploadBtn.addEventListener('click', () => boundaryFileInput.click())
+methodSelect.addEventListener('change', updateBoundaryMethodUI)
 
-boundaryFileInput.addEventListener('change', async () => {
+boundaryActionBtn.addEventListener('click', () => {
+  const method = methodSelect.value
+  beginNewBoundary()
+
+  if (method === 'rectangle') {
+    startRectangleMode()
+    hint.textContent = 'Drag across the map to create the rectangle.'
+    writeLog('Rectangle drawing started.')
+  } else if (method === 'polygon') {
+    startPolygonMode()
+    hint.textContent = 'Click around the site, then choose “Finish polygon”.'
+    writeLog('Polygon drawing started. Add at least three vertices.')
+  }
+})
+
+finishPolygonBtn.addEventListener('click', () => {
+  finishPolygonMode()
+})
+
+cancelDrawingBtn.addEventListener('click', () => {
+  cancelDrawingMode()
+  resetBoundaryWorkflow()
+  writeLog('Boundary drawing cancelled.')
+})
+
+boundaryFileInput.addEventListener('change', () => {
+  const file = boundaryFileInput.files?.[0]
+  loadBoundaryBtn.disabled = !file
+  if (file) {
+    setBoundaryStatus('File selected', 'pending')
+    clearBtn.disabled = false
+  }
+})
+
+loadBoundaryBtn.addEventListener('click', async () => {
   const file = boundaryFileInput.files?.[0]
   if (!file) return
 
-  uploadBtn.disabled = true
-  hint.textContent = `Reading ${file.name}…`
-  writeLog(`Reading boundary file: ${file.name}`)
+  beginNewBoundary()
+  loadBoundaryBtn.disabled = true
+  hint.textContent = 'Reading the shapefile…'
+  writeLog(`Reading boundary file “${file.name}”…`)
 
   try {
     const result = await readBoundaryFile(file)
-    resetAll()
-    setBoundaryFromCoordinates(result.boundary)
-    hint.textContent = 'Boundary loaded — click “Detect rooftops”.'
-    writeLog(
-      `Boundary loaded with ${result.boundary.length} vertices.`,
-      'success',
-    )
+    setPendingBoundaryFromCoordinates(result.boundary, 'shapefile')
     if (result.notice) writeLog(result.notice, 'warning')
   } catch (error) {
     const message = errorMessage(error)
+    setBoundaryStatus('Could not load', 'error')
     hint.textContent = message
-    writeLog(`Boundary upload failed: ${message}`, 'error')
-    startDrawMode()
+    writeLog(`Shapefile rejected: ${message}`, 'error')
   } finally {
-    uploadBtn.disabled = false
-    boundaryFileInput.value = ''
+    loadBoundaryBtn.disabled = false
   }
 })
 
-drawBtn.addEventListener('click', () => {
-  resetAll()
-  startDrawMode()
-  writeLog('Draw mode started. Drag a rectangle inside Athens.')
-})
+onDrawModeChanged((mode: DrawMode | null) => {
+  const polygonActive = mode === 'polygon'
+  const drawingActive = mode !== null
 
-onDrawModeChanged((active) => {
-  drawBtn.classList.toggle('active', active)
-  if (active) {
-    hint.hidden = false
-    hint.textContent = 'Drag a box across the map to pick your neighbourhood.'
-  }
+  boundaryActionBtn.disabled = drawingActive
+  finishPolygonBtn.hidden = !polygonActive
+  cancelDrawingBtn.hidden = !drawingActive
 })
 
 onBoundaryRejected((message) => {
+  confirmBoundaryBtn.disabled = true
+  detectBtn.disabled = true
+  setBoundaryStatus('Needs attention', 'error')
   hint.textContent = message
   writeLog(`Boundary rejected: ${message}`, 'error')
 })
 
-onBoundaryFinished(() => {
+onBoundaryReady((source, vertexCount) => {
+  confirmBoundaryBtn.disabled = false
+  detectBtn.disabled = true
+  clearBtn.disabled = false
+  setBoundaryStatus('Ready to confirm', 'pending')
+  hint.textContent = 'Review the orange boundary, then confirm it.'
+  writeLog(
+    `${sourceLabel(source)} boundary prepared with ${vertexCount} vertices. Confirmation required.`,
+    'success',
+  )
+})
+
+confirmBoundaryBtn.addEventListener('click', () => {
+  if (!confirmPendingBoundary()) {
+    writeLog('No pending boundary is available to confirm.', 'warning')
+  }
+})
+
+onBoundaryConfirmed(() => {
+  confirmBoundaryBtn.disabled = true
   detectBtn.disabled = false
   clearBtn.disabled = false
-  hint.textContent = 'Area set — click “Detect rooftops”.'
-  writeLog('Study boundary accepted inside the Athens study area.', 'success')
+  setBoundaryStatus('Confirmed', 'confirmed')
+  hint.textContent = 'Boundary confirmed. You can now detect building footprints.'
+  writeLog('Study boundary confirmed. Footprint detection is now available.', 'success')
 })
 
 detectBtn.addEventListener('click', async () => {
+  if (state.boundary.length < 3) {
+    detectBtn.disabled = true
+    hint.textContent = 'Confirm a study boundary before detecting footprints.'
+    writeLog('Detection blocked because no boundary is confirmed.', 'warning')
+    return
+  }
+
   detectBtn.disabled = true
-  hint.hidden = false
-  hint.textContent = 'Fetching rooftops from OpenStreetMap…'
+  hint.textContent = 'Fetching building footprints from OpenStreetMap…'
   writeLog('Requesting buildings and green spaces from OpenStreetMap…')
 
   try {
@@ -169,7 +301,7 @@ detectBtn.addEventListener('click', async () => {
     const rooftops = buildRooftops(shapes)
 
     if (rooftops.length === 0) {
-      hint.textContent = 'No usable rooftops found here — try a bigger area.'
+      hint.textContent = 'No usable rooftops found here — try a larger area.'
       writeLog('No usable rooftops were found in this boundary.', 'warning')
       detectBtn.disabled = false
       return
@@ -184,6 +316,7 @@ detectBtn.addEventListener('click', async () => {
     renderSidebar()
     search.disabled = false
     toggleBtn.disabled = false
+    detectBtn.disabled = false
     hint.textContent = `${rooftops.length} rooftops analysed.`
     writeLog(`${rooftops.length} rooftops analysed successfully.`, 'success')
   } catch (error) {
@@ -208,10 +341,14 @@ search.addEventListener('input', () => {
 })
 
 clearBtn.addEventListener('click', () => {
-  resetAll()
-  startDrawMode()
-  writeLog('Map and study boundary cleared.')
+  resetBoundaryWorkflow()
+  writeLog('Study boundary and analysis cleared.')
 })
 
-writeLog('STÉGI ready. Searches and boundaries are restricted to Athens.', 'success')
-startDrawMode()
+window.addEventListener('beforeunload', () => clearMap())
+
+updateBoundaryMethodUI()
+writeLog(
+  'STÉGI ready. Search within Athens, then draw or upload and confirm a study boundary.',
+  'success',
+)

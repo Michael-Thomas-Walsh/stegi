@@ -1,9 +1,9 @@
+// Browser-side zipped shapefile import. shpjs reads the SHP/SHX/DBF/PRJ files
+// and returns GeoJSON. STÉGI uses the largest polygon as the study boundary.
+
 import * as turf from '@turf/turf'
 import shp from 'shpjs'
-import {
-  type LatLngTuple,
-  validateAthensBoundary,
-} from './athens'
+import { type LatLngTuple, validateAthensBoundary } from './athens'
 
 export interface BoundaryFileResult {
   boundary: LatLngTuple[]
@@ -23,23 +23,21 @@ function collectOuterRings(value: unknown): CoordinateRing[] {
   const object = asObject(value)
   if (!object) return []
 
-  const type = object.type
-
-  if (type === 'FeatureCollection') {
+  if (object.type === 'FeatureCollection') {
     const features = Array.isArray(object.features) ? object.features : []
     return features.flatMap(collectOuterRings)
   }
 
-  if (type === 'Feature') {
-    return collectOuterRings(object.geometry)
-  }
+  if (object.type === 'Feature') return collectOuterRings(object.geometry)
 
-  if (type === 'GeometryCollection') {
-    const geometries = Array.isArray(object.geometries) ? object.geometries : []
+  if (object.type === 'GeometryCollection') {
+    const geometries = Array.isArray(object.geometries)
+      ? object.geometries
+      : []
     return geometries.flatMap(collectOuterRings)
   }
 
-  if (type === 'Polygon') {
+  if (object.type === 'Polygon') {
     const coordinates = Array.isArray(object.coordinates)
       ? object.coordinates
       : []
@@ -47,7 +45,7 @@ function collectOuterRings(value: unknown): CoordinateRing[] {
     return Array.isArray(outerRing) ? [outerRing as CoordinateRing] : []
   }
 
-  if (type === 'MultiPolygon') {
+  if (object.type === 'MultiPolygon') {
     const coordinates = Array.isArray(object.coordinates)
       ? object.coordinates
       : []
@@ -84,8 +82,7 @@ function cleanRing(ring: CoordinateRing): CoordinateRing {
 
 function ringArea(ring: CoordinateRing): number {
   if (ring.length < 3) return 0
-  const closed = [...ring, ring[0]]
-  return turf.area(turf.polygon([closed]))
+  return turf.area(turf.polygon([[...ring, ring[0]]]))
 }
 
 function boundaryFromGeoJSON(value: unknown): BoundaryFileResult {
@@ -94,15 +91,15 @@ function boundaryFromGeoJSON(value: unknown): BoundaryFileResult {
     .filter((ring) => ring.length >= 3)
 
   if (rings.length === 0) {
-    throw new Error('The file does not contain a valid Polygon or MultiPolygon.')
+    throw new Error('The shapefile does not contain a valid polygon.')
   }
 
   const largest = rings.reduce((best, current) =>
     ringArea(current) > ringArea(best) ? current : best,
   )
 
-  // GeoJSON/shpjs coordinates are [longitude, latitude]. STÉGI stores
-  // selection vertices as [latitude, longitude] for its Overpass query.
+  // shpjs returns standard GeoJSON [longitude, latitude]. STÉGI stores the
+  // Overpass boundary as [latitude, longitude].
   const boundary: LatLngTuple[] = largest.map(([lng, lat]) => [lat, lng])
   const validationError = validateAthensBoundary(boundary)
   if (validationError) throw new Error(validationError)
@@ -112,7 +109,7 @@ function boundaryFromGeoJSON(value: unknown): BoundaryFileResult {
     polygonCount: rings.length,
     notice:
       rings.length > 1
-        ? `The file contains ${rings.length} polygons. The largest polygon was used as the study boundary.`
+        ? `The shapefile contains ${rings.length} polygons. The largest polygon was selected.`
         : null,
   }
 }
@@ -120,34 +117,30 @@ function boundaryFromGeoJSON(value: unknown): BoundaryFileResult {
 export async function readBoundaryFile(
   file: File,
 ): Promise<BoundaryFileResult> {
-  const name = file.name.toLowerCase()
-
-  if (name.endsWith('.zip')) {
-    const parsed = (await shp(await file.arrayBuffer())) as unknown
-
-    // shpjs returns an array when a ZIP contains more than one shapefile.
-    if (Array.isArray(parsed)) {
-      return boundaryFromGeoJSON({
-        type: 'FeatureCollection',
-        features: parsed.flatMap((collection) => {
-          const object = asObject(collection)
-          return Array.isArray(object?.features) ? object.features : []
-        }),
-      })
-    }
-
-    return boundaryFromGeoJSON(parsed)
+  if (!file.name.toLowerCase().endsWith('.zip')) {
+    throw new Error('Choose a ZIP containing the shapefile components.')
   }
 
-  if (name.endsWith('.geojson') || name.endsWith('.json')) {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(await file.text()) as unknown
-    } catch {
-      throw new Error('The GeoJSON file could not be read as valid JSON.')
-    }
-    return boundaryFromGeoJSON(parsed)
+  let parsed: unknown
+  try {
+    parsed = (await shp(await file.arrayBuffer())) as unknown
+  } catch (error) {
+    console.error('Shapefile read error:', error)
+    throw new Error(
+      'The shapefile could not be read. Check that the ZIP contains SHP, SHX and DBF files, plus a PRJ file when coordinates are not WGS84.',
+    )
   }
 
-  throw new Error('Use a zipped shapefile (.zip) or a GeoJSON file.')
+  // shpjs returns an array when a ZIP contains more than one shapefile.
+  if (Array.isArray(parsed)) {
+    return boundaryFromGeoJSON({
+      type: 'FeatureCollection',
+      features: parsed.flatMap((collection) => {
+        const object = asObject(collection)
+        return Array.isArray(object?.features) ? object.features : []
+      }),
+    })
+  }
+
+  return boundaryFromGeoJSON(parsed)
 }
