@@ -33,6 +33,31 @@ body {
   letter-spacing: 0.05em;
 }
 
+.brand-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4.25rem;
+}
+
+.brand-logo {
+  width: 3.8rem;
+  height: 3.8rem;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.brand-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.brand-copy .subtitle {
+  line-height: 1.25;
+}
+
 #sidebar h2 {
   font-size: 0.92rem;
 }
@@ -594,4 +619,117 @@ input[type='search'] {
   .button-row.compact {
     justify-content: flex-start;
   }
+}
+
+/* --- Step 4.3: STÉGI custom vector basemap --- */
+#map {
+  background: #e7e8e6;
+}
+
+/* MapLibre is used only as the vector basemap. Leaflet continues to own all
+   interaction, drawing and analytical overlays. */
+.maplibregl-map,
+.maplibregl-canvas-container,
+.maplibregl-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.stegi-vector-canvas {
+  outline: none;
+}
+
+/* Keep Leaflet controls aligned with the sidebar design language. */
+.leaflet-bar,
+.leaflet-control-layers {
+  border: 1px solid rgb(42 42 38 / 22%) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 6px 22px rgb(31 35 28 / 12%) !important;
+}
+
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  width: 34px;
+  height: 34px;
+  border-bottom-color: #d8d6cf;
+  background: rgb(255 255 252 / 94%);
+  color: #292a26;
+  line-height: 34px;
+}
+
+.leaflet-bar a:first-child {
+  border-radius: 9px 9px 0 0;
+}
+
+.leaflet-bar a:last-child {
+  border-radius: 0 0 9px 9px;
+}
+
+.leaflet-control-layers {
+  overflow: hidden;
+  background: rgb(255 255 252 / 96%);
+  color: #292a26;
+}
+
+.leaflet-control-layers-toggle {
+  width: 38px;
+  height: 38px;
+  background-size: 20px 20px;
+  opacity: 0.78;
+}
+
+.leaflet-control-layers-expanded {
+  min-width: 185px;
+  padding: 0.65rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+}
+
+.leaflet-control-layers-base label {
+  display: flex;
+  align-items: center;
+  min-height: 1.8rem;
+}
+
+.leaflet-control-layers-selector {
+  accent-color: #6d913d;
+}
+
+.leaflet-control-scale-line {
+  border-color: rgb(41 42 38 / 65%);
+  border-top: 0;
+  background: rgb(255 255 252 / 74%);
+  color: #292a26;
+  font-family: inherit;
+  font-size: 0.65rem;
+  line-height: 1.3;
+  text-shadow: none;
+}
+
+.leaflet-control-attribution {
+  padding: 0.15rem 0.35rem !important;
+  background: rgb(255 255 252 / 72%) !important;
+  color: #696a64 !important;
+  font-family: inherit;
+  font-size: 0.58rem !important;
+}
+
+.leaflet-control-attribution a {
+  color: #4e6140;
+}
+
+/* Fallback detailed OSM layer remains available from the layer control. */
+#map[data-basemap='osm'] .stegi-osm-tiles {
+  filter: saturate(0.82) contrast(0.96) brightness(1.01);
+}
+
+/* --- Greater Athens frame --- */
+/* The outside treatment is only a transparent diagonal SVG pattern. */
+.stegi-athens-outside-hatch {
+  pointer-events: none;
+}
+
+.stegi-athens-boundary-line {
+  filter: drop-shadow(0 1px 0 rgb(255 255 252 / 86%));
+  vector-effect: non-scaling-stroke;
 }

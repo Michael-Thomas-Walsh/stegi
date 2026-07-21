@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import type { Rooftop } from './state'
 import { state } from './state'
 import { COLORS } from './constants'
+import { installBasemaps } from './basemap'
 import {
   ATHENS_CENTER,
   ATHENS_STUDY_BOUNDS,
@@ -53,12 +54,11 @@ export function createMap(containerId: string): L.Map {
     maxBounds: allowedBounds.pad(0.08),
     maxBoundsViscosity: 1,
     minZoom: 12,
+    zoomControl: false,
+    preferCanvas: true,
   }).setView(ATHENS_CENTER, START_ZOOM)
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
-    maxZoom: 19,
-  }).addTo(map)
+  installBasemaps(map)
 
   map.on('mousedown', handleRectangleStart)
   map.on('mousemove', handleRectangleMove)
