@@ -1,23 +1,37 @@
 <!doctype html>
-<!-- HTML = STRUCTURE. Walls & rooms: what exists on the page — a heading,
-     two buttons, a tower. How it LOOKS lives in src/style.css; what it
-     DOES lives in src/main.ts. Three languages, one page. -->
+<!-- HTML = STRUCTURE. Two panes: a sidebar (controls + rooftop list) and a
+     map. How it LOOKS lives in src/style.css; what it DOES lives in
+     src/main.ts. -->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My First Project</title>
+    <title>STÉGI — The Invisible City</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <main>
-      <h1>Hello, builder! 👋</h1>
-      <p>Every click adds a floor. This is your hello world — replace it with your own project.</p>
-      <button id="add-floor">Add a floor 🏗️</button>
-      <button id="reset">Tear down</button>
-      <p id="counter">0 floors</p>
-      <div id="tower"></div>
-    </main>
+    <aside id="sidebar">
+      <header>
+        <h1>STÉGI</h1>
+        <p class="subtitle">Rooftop greening for a cooler Athens</p>
+      </header>
+
+      <div id="controls">
+        <button id="draw">Draw area</button>
+        <button id="detect" disabled>Detect rooftops</button>
+        <button id="toggle-view" disabled>Show: After</button>
+        <button id="clear" disabled>Clear</button>
+      </div>
+
+      <input id="search" type="search" placeholder="Filter: park / garden" disabled />
+      <p id="hint">Drag a box across the map to pick your neighbourhood.</p>
+
+      <div id="tally" hidden></div>
+      <div id="detail" hidden></div>
+      <ul id="rooftop-list"></ul>
+    </aside>
+
+    <div id="map"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -1,73 +1,206 @@
-/* CSS = APPEARANCE. Materials & finishes: colors, spacing, type — how the
-   structure in index.html looks. Change a color here, save, watch the
-   browser update. */
+/* CSS = APPEARANCE. Two panes: sidebar on the left, map filling the rest.
+   Palette matches docs/frontend.md. */
 
 * {
   box-sizing: border-box;
   margin: 0;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   font-family: system-ui, sans-serif;
-  background: #f4f1ea;
-  color: #222;
-  min-height: 100vh;
+  color: #212121;
   display: flex;
-  justify-content: center;
-  padding: 3rem 1rem;
 }
 
-main {
-  width: 100%;
-  max-width: 420px;
-  text-align: center;
+#sidebar {
+  width: 320px;
+  flex-shrink: 0;
+  background: #ffffff;
+  border-right: 1px solid #c9c9c9;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
 }
 
-h1 {
-  margin-bottom: 0.5rem;
+#sidebar h1 {
+  font-size: 1.4rem;
+  letter-spacing: 0.05em;
 }
 
-p {
+.subtitle {
   color: #555;
-  margin-bottom: 1.5rem;
+  font-size: 0.85rem;
+}
+
+/* --- controls --- */
+#controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 button {
-  font-size: 1rem;
-  padding: 0.6rem 1.2rem;
-  margin: 0 0.25rem 1rem;
-  border: 2px solid #222;
+  font-size: 0.9rem;
+  padding: 0.45rem 0.7rem;
+  border: 2px solid #212121;
   border-radius: 8px;
-  background: #ffd84d;
+  background: #ffffff;
   cursor: pointer;
 }
 
-button:hover {
-  transform: translateY(-1px);
+button:hover:not(:disabled) {
+  background: #f1f1f1;
 }
 
-#reset {
-  background: #fff;
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-#counter {
-  font-weight: bold;
-  color: #222;
+#detect {
+  background: #8bc34a;
 }
 
-/* The tower grows upward from a fixed ground line. */
-#tower {
+/* The draw button glows while you're in "drag a box" mode. */
+#draw.active {
+  background: #212121;
+  color: #ffffff;
+}
+
+#search {
+  font-size: 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid #212121;
+  border-radius: 8px;
+}
+
+#hint {
+  color: #555;
+  font-size: 0.9rem;
+}
+
+/* --- tally --- */
+.tally-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.tally-grid div {
+  background: #f7f7f5;
+  border-radius: 8px;
+  padding: 0.5rem;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  min-height: 200px;
-  border-bottom: 4px solid #222;
-  padding: 0 4rem;
 }
 
-.floor {
-  height: 22px;
-  border: 2px solid #222;
-  border-bottom: none;
-  border-radius: 2px 2px 0 0;
+.tally-grid b {
+  font-size: 1.05rem;
+}
+
+.tally-grid span {
+  color: #555;
+  font-size: 0.75rem;
+}
+
+.disclaimer {
+  color: #888;
+  font-size: 0.72rem;
+  font-style: italic;
+  margin-top: 0.4rem;
+}
+
+/* --- rooftop list --- */
+#rooftop-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.roof-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.roof-row:hover {
+  background: #f7f7f5;
+}
+
+.roof-row.selected {
+  border-color: #212121;
+  border-width: 2px;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot.park {
+  background: #1b5e20;
+}
+
+.dot.garden {
+  background: #8bc34a;
+}
+
+.roof-label {
+  flex: 1;
+}
+
+.roof-figs {
+  color: #555;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+/* --- detail panel (sits just under the tally, above the list) --- */
+#detail {
+  background: #f7f7f5;
+  border: 1px solid #c9c9c9;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+#detail h2 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+#detail dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+#detail dt {
+  color: #555;
+}
+
+#detail dd {
+  text-align: right;
+  font-weight: 600;
+}
+
+/* --- map --- */
+#map {
+  flex: 1;
+  height: 100vh;
 }
