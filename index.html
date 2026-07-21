@@ -135,6 +135,60 @@
     </aside>
 
     <div id="map"></div>
+
+    <div
+      id="loading-overlay"
+      class="loading-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="loading-title"
+      aria-describedby="loading-detail"
+      hidden
+    >
+      <section class="loading-card">
+        <div class="loading-heading">
+          <span class="loading-spinner" aria-hidden="true"></span>
+          <div>
+            <p class="loading-kicker">STÉGI analysis</p>
+            <h2 id="loading-title">Preparing the study area</h2>
+          </div>
+        </div>
+
+        <p id="loading-detail" class="loading-detail">
+          Checking the confirmed study boundary…
+        </p>
+
+        <div class="loading-progress-row">
+          <progress id="loading-progress" max="100" value="0"></progress>
+          <span id="loading-progress-label">0%</span>
+        </div>
+
+        <aside class="loading-fact" aria-live="polite">
+          <span class="loading-fact-label">While you wait</span>
+          <strong id="loading-fact-title">Shade first</strong>
+          <p id="loading-fact-text">
+            External shading can stop solar gain before it reaches the glazing.
+          </p>
+        </aside>
+
+        <p class="loading-note">
+          Public OpenStreetMap servers can occasionally be busy. STÉGI will
+          automatically try a backup server when needed.
+        </p>
+
+        <p
+          id="loading-long-wait"
+          class="loading-long-wait"
+          role="status"
+          aria-live="polite"
+          hidden
+        >
+          Wow, that’s a lot of footprints! Maybe you should try a smaller
+          footprint if you don’t want to wait for so long.
+        </p>
+      </section>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

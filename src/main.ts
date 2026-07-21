@@ -22,7 +22,7 @@ import {
   type BoundarySource,
   type DrawMode,
 } from './map'
-import { fetchShapes } from './osm'
+import { fetchShapes, type OsmProgressEvent } from './osm'
 import { buildRooftops } from './features'
 import { clusterRooftops } from './cluster'
 import { assignGreenTypes } from './greenType'
@@ -31,9 +31,18 @@ import { onRooftopRowClick, renderSidebar } from './sidebar'
 import { geocodeAthensAddress } from './geocode'
 import { readBoundaryFile } from './boundaryIO'
 import { initialiseLog, writeLog } from './log'
+import {
+  completeLoading,
+  failLoading,
+  initialiseLoading,
+  nextPaint,
+  showLoading,
+  updateLoading,
+} from './loading'
 
 createMap('map')
 initialiseLog('activity-log')
+initialiseLoading()
 
 const addressForm = document.querySelector<HTMLFormElement>('#address-form')!
 const addressInput = document.querySelector<HTMLInputElement>('#address-search')!
@@ -284,6 +293,27 @@ onBoundaryConfirmed(() => {
   writeLog('Study boundary confirmed. Footprint detection is now available.', 'success')
 })
 
+function reportOsmProgress(event: OsmProgressEvent): void {
+  const progressByStage: Record<OsmProgressEvent['stage'], number> = {
+    query: 12,
+    connecting: 25,
+    retrying: 30,
+    downloaded: 50,
+    processing: 56,
+    complete: 62,
+  }
+
+  const title =
+    event.stage === 'retrying'
+      ? 'Trying another map server'
+      : event.stage === 'processing' || event.stage === 'complete'
+        ? 'Preparing map geometry'
+        : 'Downloading OpenStreetMap data'
+
+  updateLoading(title, event.message, progressByStage[event.stage])
+  writeLog(event.message, event.stage === 'retrying' ? 'warning' : 'info')
+}
+
 detectBtn.addEventListener('click', async () => {
   if (state.boundary.length < 3) {
     detectBtn.disabled = true
@@ -293,38 +323,87 @@ detectBtn.addEventListener('click', async () => {
   }
 
   detectBtn.disabled = true
-  hint.textContent = 'Fetching building footprints from OpenStreetMap…'
-  writeLog('Requesting buildings and green spaces from OpenStreetMap…')
+  hint.textContent = 'Analysing the confirmed study area…'
+  showLoading(
+    'Preparing the study area',
+    'Checking the confirmed boundary before contacting OpenStreetMap…',
+    5,
+  )
+  writeLog('Footprint analysis started for the confirmed boundary.')
 
   try {
-    const shapes = await fetchShapes(state.boundary)
+    await nextPaint()
+    const shapes = await fetchShapes(state.boundary, reportOsmProgress)
+
+    updateLoading(
+      'Building the rooftop dataset',
+      'Measuring footprint geometry and proximity to existing green space…',
+      68,
+    )
+    await nextPaint()
     const rooftops = buildRooftops(shapes)
 
     if (rooftops.length === 0) {
       hint.textContent = 'No usable rooftops found here — try a larger area.'
       writeLog('No usable rooftops were found in this boundary.', 'warning')
-      detectBtn.disabled = false
+      await failLoading(
+        'No usable rooftops found',
+        'Try confirming a slightly larger study boundary.',
+      )
       return
     }
 
+    updateLoading(
+      'Clustering rooftop types',
+      `Grouping ${rooftops.length.toLocaleString()} rooftops by their spatial characteristics…`,
+      76,
+    )
+    await nextPaint()
     clusterRooftops(rooftops)
+
+    updateLoading(
+      'Assigning greening strategies',
+      'Comparing rooftop clusters and identifying park and garden opportunities…',
+      84,
+    )
+    await nextPaint()
     assignGreenTypes(rooftops)
+
+    updateLoading(
+      'Estimating cooling and cost',
+      'Calculating the illustrative before-and-after scenario…',
+      91,
+    )
+    await nextPaint()
     computeCoolingAndCost(rooftops)
     state.rooftops = rooftops
 
+    updateLoading(
+      'Drawing the results',
+      'Adding the analysed rooftop footprints and updating the sidebar…',
+      97,
+    )
+    await nextPaint()
     drawRooftops(rooftops)
     renderSidebar()
     search.disabled = false
     toggleBtn.disabled = false
-    detectBtn.disabled = false
+
     hint.textContent = `${rooftops.length} rooftops analysed.`
     writeLog(`${rooftops.length} rooftops analysed successfully.`, 'success')
+    await completeLoading(
+      'Analysis complete',
+      `${rooftops.length.toLocaleString()} rooftops are ready to explore.`,
+    )
   } catch (error) {
+    const message = errorMessage(error)
     hint.textContent =
       'Could not reach OpenStreetMap. Check your connection and try again.'
-    detectBtn.disabled = false
-    writeLog(`OpenStreetMap request failed: ${errorMessage(error)}`, 'error')
+    writeLog(`OpenStreetMap request failed: ${message}`, 'error')
     console.error(error)
+    await failLoading('Footprint detection failed', message)
+  } finally {
+    if (state.boundary.length >= 3) detectBtn.disabled = false
   }
 })
 
