@@ -1,93 +1,110 @@
-// The ML core: k-means clustering, hand-written in plain TypeScript.
-//
-// It groups rooftops into "typologies" — roofs with similar area, shape,
-// density, etc. end up in the same cluster. No library needed; k-means is
-// just: pick k centres, assign each point to its nearest centre, move each
-// centre to the average of its points, repeat.
+// K-means rooftop clustering. Building height is included where OSM provides
+// it; roofs without height data receive the study area's median known height
+// so missing data does not automatically create its own typology.
 
 import type { Rooftop } from './state'
+import { summariseHeights } from './height'
 
 const ITERATIONS = 20
 
-// The features we cluster on. (orientation is left out on purpose — a roof
-// facing 10° vs 170° shouldn't split typologies the way size/density do.)
-function vectorOf(r: Rooftop): number[] {
-  return [r.area, r.aspectRatio, r.density, r.distanceToGreen]
+function vectorOf(rooftop: Rooftop, fallbackHeightM: number): number[] {
+  return [
+    rooftop.area,
+    rooftop.aspectRatio,
+    rooftop.density,
+    rooftop.distanceToGreen,
+    rooftop.heightM ?? fallbackHeightM,
+  ]
 }
 
-// Rescale every column to 0..1 so that big numbers (area) don't drown out
-// small ones (aspect ratio) when we measure distance.
 function normalise(rows: number[][]): number[][] {
-  const cols = rows[0].length
-  const min = new Array(cols).fill(Infinity)
-  const max = new Array(cols).fill(-Infinity)
+  const columns = rows[0].length
+  const minimum = new Array(columns).fill(Number.POSITIVE_INFINITY)
+  const maximum = new Array(columns).fill(Number.NEGATIVE_INFINITY)
+
   for (const row of rows) {
-    row.forEach((v, c) => {
-      min[c] = Math.min(min[c], v)
-      max[c] = Math.max(max[c], v)
+    row.forEach((value, column) => {
+      minimum[column] = Math.min(minimum[column], value)
+      maximum[column] = Math.max(maximum[column], value)
     })
   }
+
   return rows.map((row) =>
-    row.map((v, c) => {
-      const span = max[c] - min[c]
-      return span === 0 ? 0 : (v - min[c]) / span
+    row.map((value, column) => {
+      const span = maximum[column] - minimum[column]
+      return span === 0 ? 0 : (value - minimum[column]) / span
     }),
   )
 }
 
 function distance(a: number[], b: number[]): number {
   let sum = 0
-  for (let i = 0; i < a.length; i++) sum += (a[i] - b[i]) ** 2
-  return sum // squared distance is enough for "which is nearest"
+  for (let index = 0; index < a.length; index += 1) {
+    sum += (a[index] - b[index]) ** 2
+  }
+  return sum
 }
 
-// Assigns each rooftop a `cluster` number (0..k-1). Mutates in place.
 export function clusterRooftops(rooftops: Rooftop[], k = 3): void {
   if (rooftops.length === 0) return
+
   const usedK = Math.min(k, rooftops.length)
+  const heightSummary = summariseHeights(rooftops)
+  const fallbackHeightM = heightSummary.medianKnownM ?? 12
+  const points = normalise(
+    rooftops.map((rooftop) => vectorOf(rooftop, fallbackHeightM)),
+  )
 
-  const points = normalise(rooftops.map(vectorOf))
-
-  // Deterministic start: sort by overall size and pick k evenly-spaced
-  // points as the first centres. (Same input → same clusters every run.)
   const order = points
-    .map((p, i) => ({ i, size: p.reduce((s, v) => s + v, 0) }))
+    .map((point, index) => ({
+      index,
+      size: point.reduce((sum, value) => sum + value, 0),
+    }))
     .sort((a, b) => a.size - b.size)
+
   let centres: number[][] = []
-  for (let c = 0; c < usedK; c++) {
-    const idx = Math.floor((c / usedK) * order.length)
-    centres.push([...points[order[idx].i]])
+  for (let centreIndex = 0; centreIndex < usedK; centreIndex += 1) {
+    const orderIndex = Math.floor((centreIndex / usedK) * order.length)
+    centres.push([...points[order[orderIndex].index]])
   }
 
   const assignment = new Array(points.length).fill(0)
 
-  for (let step = 0; step < ITERATIONS; step++) {
-    // Assign each point to its nearest centre.
-    for (let p = 0; p < points.length; p++) {
-      let best = 0
-      let bestDist = Infinity
-      for (let c = 0; c < usedK; c++) {
-        const d = distance(points[p], centres[c])
-        if (d < bestDist) {
-          bestDist = d
-          best = c
+  for (let step = 0; step < ITERATIONS; step += 1) {
+    for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
+      let bestCentre = 0
+      let bestDistance = Number.POSITIVE_INFINITY
+
+      for (let centreIndex = 0; centreIndex < usedK; centreIndex += 1) {
+        const currentDistance = distance(points[pointIndex], centres[centreIndex])
+        if (currentDistance < bestDistance) {
+          bestDistance = currentDistance
+          bestCentre = centreIndex
         }
       }
-      assignment[p] = best
+
+      assignment[pointIndex] = bestCentre
     }
 
-    // Move each centre to the average of its assigned points.
-    const sums = centres.map((c) => new Array(c.length).fill(0))
+    const sums = centres.map((centre) => new Array(centre.length).fill(0))
     const counts = new Array(usedK).fill(0)
-    for (let p = 0; p < points.length; p++) {
-      const c = assignment[p]
-      counts[c]++
-      points[p].forEach((v, d) => (sums[c][d] += v))
+
+    for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
+      const centreIndex = assignment[pointIndex]
+      counts[centreIndex] += 1
+      points[pointIndex].forEach((value, dimension) => {
+        sums[centreIndex][dimension] += value
+      })
     }
-    centres = sums.map((sum, c) =>
-      counts[c] === 0 ? centres[c] : sum.map((v) => v / counts[c]),
+
+    centres = sums.map((sum, centreIndex) =>
+      counts[centreIndex] === 0
+        ? centres[centreIndex]
+        : sum.map((value) => value / counts[centreIndex]),
     )
   }
 
-  rooftops.forEach((r, i) => (r.cluster = assignment[i]))
+  rooftops.forEach((rooftop, index) => {
+    rooftop.cluster = assignment[index]
+  })
 }

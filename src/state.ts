@@ -3,12 +3,21 @@
 // Nothing upstream is ever rewritten.
 
 import type { GreenType } from './constants'
+import type { HeightConfidence, HeightSource } from './height'
+
+export type MapDisplayMode = 'proposal' | 'height' | 'height-confidence'
 
 // One detected rooftop, with everything we compute about it.
 export interface Rooftop {
   id: number
+
   // The footprint as GeoJSON (lon, lat rings), used for drawing + geometry.
   polygon: GeoJSON.Feature<GeoJSON.Polygon>
+
+  // OpenStreetMap identity and source attributes retained for traceability.
+  osmId: number | null
+  osmTags: Record<string, string>
+
   // Feature vector (the numbers the clustering uses):
   area: number // m²
   aspectRatio: number // long side / short side
@@ -16,6 +25,15 @@ export interface Rooftop {
   density: number // number of neighbouring buildings within 60 m
   distanceToGreen: number // metres to nearest existing green space
   heatProxy: number // simple urban-heat estimate (higher = hotter)
+
+  // Height / relative Z above local ground.
+  heightM: number | null
+  buildingLevels: number | null
+  roofHeightM: number | null
+  roofLevels: number | null
+  heightSource: HeightSource
+  heightConfidence: HeightConfidence
+
   // Results:
   cluster: number // which typology this roof belongs to
   greenType: GreenType // PARK or GARDEN
@@ -27,8 +45,9 @@ export interface AppState {
   boundary: [number, number][] // polygon vertices [lat, lng] being drawn
   rooftops: Rooftop[]
   selectedId: number | null
-  showAfter: boolean // before/after toggle (false = grey "before")
+  showAfter: boolean // before/after toggle for the proposal view
   filter: string // sidebar search text
+  mapDisplay: MapDisplayMode
 }
 
 export const state: AppState = {
@@ -37,4 +56,5 @@ export const state: AppState = {
   selectedId: null,
   showAfter: true,
   filter: '',
+  mapDisplay: 'proposal',
 }

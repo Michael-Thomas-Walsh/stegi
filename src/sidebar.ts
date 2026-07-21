@@ -1,34 +1,111 @@
-// The left sidebar: the live tally, the searchable rooftop list, and the
-// detail panel for the selected rooftop. It only reads state and renders —
-// clicks are handled back in main.ts so the map stays in sync.
+// The left sidebar: live totals, searchable rooftop list and selected-roof
+// detail. It reads shared state only; map/list click wiring remains in main.ts.
 
 import type { Rooftop } from './state'
 import { state } from './state'
 import { totalsFor } from './cooling'
+import {
+  heightColour,
+  heightConfidenceLabel,
+  heightSourceLabel,
+  summariseHeights,
+} from './height'
 
-const hint = document.querySelector<HTMLParagraphElement>('#hint')!
-const tally = document.querySelector<HTMLDivElement>('#tally')!
+const hint = document.querySelector<HTMLElement>('#hint')!
+const tally = document.querySelector<HTMLElement>('#tally')!
 const list = document.querySelector<HTMLUListElement>('#rooftop-list')!
-const detail = document.querySelector<HTMLDivElement>('#detail')!
+const detail = document.querySelector<HTMLElement>('#detail')!
 
 let onRowClick: ((id: number) => void) | null = null
-export function onRooftopRowClick(cb: (id: number) => void) {
-  onRowClick = cb
+
+export function onRooftopRowClick(callback: (id: number) => void): void {
+  onRowClick = callback
 }
 
-const euro = (n: number) =>
-  '€' + Math.round(n).toLocaleString('en-US')
-const num = (n: number, digits = 0) =>
-  n.toLocaleString('en-US', { maximumFractionDigits: digits })
+const euro = (value: number): string =>
+  `€${Math.round(value).toLocaleString('en-GB')}`
 
-// The roofs currently shown, after the search filter is applied.
+const num = (value: number, digits = 0): string =>
+  value.toLocaleString('en-GB', { maximumFractionDigits: digits })
+
+const heightText = (heightM: number | null): string =>
+  heightM === null ? 'No height data' : `${num(heightM, 1)} m`
+
+function searchableText(rooftop: Rooftop): string {
+  return [
+    rooftop.greenType,
+    rooftop.heightSource,
+    heightSourceLabel(rooftop.heightSource),
+    rooftop.heightConfidence,
+    rooftop.osmTags.name ?? '',
+    rooftop.osmTags.building ?? '',
+    rooftop.buildingLevels?.toString() ?? '',
+    rooftop.heightM?.toFixed(1) ?? '',
+  ]
+    .join(' ')
+    .toLowerCase()
+}
+
 function visibleRooftops(): Rooftop[] {
-  const q = state.filter.trim().toLowerCase()
-  if (!q) return state.rooftops
-  return state.rooftops.filter((r) => r.greenType.toLowerCase().includes(q))
+  const query = state.filter.trim().toLowerCase()
+  if (!query) return state.rooftops
+  return state.rooftops.filter((rooftop) =>
+    searchableText(rooftop).includes(query),
+  )
 }
 
-export function renderSidebar() {
+function rankedRooftops(rooftops: Rooftop[]): Rooftop[] {
+  if (state.mapDisplay === 'height') {
+    return [...rooftops].sort(
+      (a, b) => (b.heightM ?? Number.NEGATIVE_INFINITY) - (a.heightM ?? Number.NEGATIVE_INFINITY),
+    )
+  }
+
+  if (state.mapDisplay === 'height-confidence') {
+    const rank = { high: 0, medium: 1, none: 2 } as const
+    return [...rooftops].sort(
+      (a, b) => rank[a.heightConfidence] - rank[b.heightConfidence],
+    )
+  }
+
+  return [...rooftops].sort((a, b) => {
+    const aValue = a.coolingC > 0 ? a.costEur / a.coolingC : Number.POSITIVE_INFINITY
+    const bValue = b.coolingC > 0 ? b.costEur / b.coolingC : Number.POSITIVE_INFINITY
+    return aValue - bValue
+  })
+}
+
+function rowPrimary(rooftop: Rooftop): string {
+  if (state.mapDisplay === 'height') return heightText(rooftop.heightM)
+  if (state.mapDisplay === 'height-confidence') {
+    return heightSourceLabel(rooftop.heightSource)
+  }
+  return rooftop.greenType
+}
+
+function rowSecondary(rooftop: Rooftop): string {
+  if (state.mapDisplay === 'height') {
+    return `${num(rooftop.area)} m² · ${heightSourceLabel(rooftop.heightSource)}`
+  }
+
+  if (state.mapDisplay === 'height-confidence') {
+    return `${heightConfidenceLabel(rooftop.heightConfidence)} confidence · ${heightText(rooftop.heightM)}`
+  }
+
+  return `${num(rooftop.area)} m² · ${num(rooftop.coolingC, 2)}°C · ${euro(rooftop.costEur)}`
+}
+
+function rowColour(rooftop: Rooftop): string {
+  if (state.mapDisplay === 'height') return heightColour(rooftop.heightM)
+  if (state.mapDisplay === 'height-confidence') {
+    if (rooftop.heightConfidence === 'high') return '#2f6f45'
+    if (rooftop.heightConfidence === 'medium') return '#d18a32'
+    return '#a6a8a6'
+  }
+  return rooftop.greenType === 'PARK' ? '#1b5e20' : '#8bc34a'
+}
+
+export function renderSidebar(): void {
   const shown = visibleRooftops()
 
   if (state.rooftops.length === 0) {
@@ -40,57 +117,95 @@ export function renderSidebar() {
 
   hint.hidden = true
 
-  // --- live tally over the visible roofs ---
-  const t = totalsFor(shown)
+  const totals = totalsFor(shown)
+  const heights = summariseHeights(shown)
   tally.hidden = false
   tally.innerHTML = `
     <div class="tally-grid">
-      <div><b>${num(t.greenM2)}</b><span>green m²</span></div>
-      <div><b>${num(t.coolingC, 2)} °C</b><span>cooling</span></div>
-      <div><b>${euro(t.costEur)}</b><span>cost</span></div>
-      <div><b>${euro(t.eurPerC)}</b><span>per °C</span></div>
+      <div><b>${num(totals.greenM2)}</b><span>green m²</span></div>
+      <div><b>${num(totals.coolingC, 2)} °C</b><span>cooling</span></div>
+      <div><b>${euro(totals.costEur)}</b><span>cost</span></div>
+      <div><b>${euro(totals.eurPerC)}</b><span>per °C</span></div>
     </div>
-    <p class="disclaimer">Illustrative estimates, not certified figures.</p>`
+    <div class="height-summary">
+      <div>
+        <strong>${num(heights.coveragePercent)}%</strong>
+        <span>height coverage</span>
+      </div>
+      <div>
+        <strong>${heights.averageKnownM === null ? '—' : `${num(heights.averageKnownM, 1)} m`}</strong>
+        <span>average known height</span>
+      </div>
+      <p>${heights.explicit} explicit · ${heights.estimated} estimated · ${heights.missing} unavailable</p>
+    </div>
+    <p class="disclaimer">Cooling and cost are illustrative estimates. Height is relative to local ground, not elevation above sea level.</p>
+  `
 
-  // --- the rooftop list (ranked by cost-effectiveness, best first) ---
-  const ranked = [...shown].sort(
-    (a, b) => a.costEur / a.coolingC - b.costEur / b.coolingC,
-  )
   list.innerHTML = ''
-  for (const r of ranked) {
-    const li = document.createElement('li')
-    li.className =
-      'roof-row' + (r.id === state.selectedId ? ' selected' : '')
-    li.innerHTML = `
-      <span class="dot ${r.greenType.toLowerCase()}"></span>
-      <span class="roof-label">${r.greenType} · ${num(r.area)} m²</span>
-      <span class="roof-figs">${num(r.coolingC, 2)}°C · ${euro(r.costEur)}</span>`
-    li.addEventListener('click', () => onRowClick?.(r.id))
-    list.appendChild(li)
+  for (const rooftop of rankedRooftops(shown)) {
+    const item = document.createElement('li')
+    item.className = `roof-row${rooftop.id === state.selectedId ? ' selected' : ''}`
+
+    const dot = document.createElement('span')
+    dot.className = 'dot'
+    dot.style.backgroundColor = rowColour(rooftop)
+
+    const label = document.createElement('span')
+    label.className = 'roof-label'
+    label.textContent = rowPrimary(rooftop)
+
+    const figures = document.createElement('span')
+    figures.className = 'roof-figs'
+    figures.textContent = rowSecondary(rooftop)
+
+    item.append(dot, label, figures)
+    item.addEventListener('click', () => onRowClick?.(rooftop.id))
+    list.appendChild(item)
   }
 
   renderDetail()
 }
 
-function renderDetail() {
-  const r = state.rooftops.find((x) => x.id === state.selectedId)
-  if (!r) {
+function detailValue(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function renderDetail(): void {
+  const rooftop = state.rooftops.find((candidate) => candidate.id === state.selectedId)
+  if (!rooftop) {
     detail.hidden = true
     return
   }
+
+  const osmReference = rooftop.osmId === null ? 'Unavailable' : `Way ${rooftop.osmId}`
+  const levels = rooftop.buildingLevels === null
+    ? 'Not tagged'
+    : num(rooftop.buildingLevels, 1)
+
   detail.hidden = false
   detail.innerHTML = `
-    <h2>${r.greenType}</h2>
+    <h2>${detailValue(rooftop.greenType)} rooftop</h2>
     <dl>
-      <dt>Area</dt><dd>${num(r.area)} m²</dd>
-      <dt>Orientation</dt><dd>${num(r.orientation)}°</dd>
-      <dt>Neighbours (60 m)</dt><dd>${r.density}</dd>
-      <dt>To nearest green</dt><dd>${num(r.distanceToGreen)} m</dd>
-      <dt>Cooling</dt><dd>${num(r.coolingC, 2)} °C</dd>
-      <dt>Cost</dt><dd>${euro(r.costEur)}</dd>
-      <dt>Cost per °C</dt><dd>${euro(r.costEur / r.coolingC)}</dd>
-    </dl>`
-  // Bring the panel into view so a click on the map or a far-down list row
-  // doesn't leave the details off-screen.
+      <dt>Area</dt><dd>${num(rooftop.area)} m²</dd>
+      <dt>Orientation</dt><dd>${num(rooftop.orientation)}°</dd>
+      <dt>Neighbours (60 m)</dt><dd>${rooftop.density}</dd>
+      <dt>To nearest green</dt><dd>${num(rooftop.distanceToGreen)} m</dd>
+      <dt>Relative roof Z</dt><dd>${heightText(rooftop.heightM)}</dd>
+      <dt>Building levels</dt><dd>${levels}</dd>
+      <dt>Height source</dt><dd>${detailValue(heightSourceLabel(rooftop.heightSource))}</dd>
+      <dt>Height confidence</dt><dd>${heightConfidenceLabel(rooftop.heightConfidence)}</dd>
+      <dt>OSM reference</dt><dd>${osmReference}</dd>
+      <dt>Cooling</dt><dd>${num(rooftop.coolingC, 2)} °C</dd>
+      <dt>Cost</dt><dd>${euro(rooftop.costEur)}</dd>
+      <dt>Cost per °C</dt><dd>${rooftop.coolingC > 0 ? euro(rooftop.costEur / rooftop.coolingC) : '—'}</dd>
+    </dl>
+    <p class="detail-note">Relative roof Z is the building top above local ground. It is not an absolute terrain or sea-level elevation.</p>
+  `
+
   detail.scrollIntoView({ block: 'nearest' })
 }

@@ -1,6 +1,6 @@
 // Entry point: wires the staged site → boundary → footprint workflow together.
 
-import { state } from './state'
+import { state, type MapDisplayMode } from './state'
 import {
   cancelDrawingMode,
   clearMap,
@@ -24,6 +24,7 @@ import {
 } from './map'
 import { fetchShapes, type OsmProgressEvent } from './osm'
 import { buildRooftops } from './features'
+import { summariseHeights } from './height'
 import { clusterRooftops } from './cluster'
 import { assignGreenTypes } from './greenType'
 import { computeCoolingAndCost } from './cooling'
@@ -76,6 +77,12 @@ const detectBtn = document.querySelector<HTMLButtonElement>('#detect')!
 const toggleBtn =
   document.querySelector<HTMLButtonElement>('#toggle-view')!
 const search = document.querySelector<HTMLInputElement>('#search')!
+const mapDisplaySelect =
+  document.querySelector<HTMLSelectElement>('#map-display')!
+const heightLegend =
+  document.querySelector<HTMLElement>('#height-legend')!
+const heightConfidenceLegend =
+  document.querySelector<HTMLElement>('#height-confidence-legend')!
 const hint = document.querySelector<HTMLParagraphElement>('#hint')!
 
 function errorMessage(error: unknown): string {
@@ -102,10 +109,36 @@ function resetAnalysis(): void {
   state.selectedId = null
   state.filter = ''
   state.showAfter = true
+  state.mapDisplay = 'proposal'
   search.value = ''
   search.disabled = true
+  search.placeholder = 'Filter: park / garden / height'
+  mapDisplaySelect.value = 'proposal'
+  mapDisplaySelect.disabled = true
+  heightLegend.hidden = true
+  heightConfidenceLegend.hidden = true
   toggleBtn.textContent = 'Show: After'
   toggleBtn.disabled = true
+  renderSidebar()
+}
+
+function updateMapDisplayUI(): void {
+  const hasResults = state.rooftops.length > 0
+  const proposalMode = state.mapDisplay === 'proposal'
+
+  toggleBtn.disabled = !hasResults || !proposalMode
+  heightLegend.hidden = state.mapDisplay !== 'height'
+  heightConfidenceLegend.hidden = state.mapDisplay !== 'height-confidence'
+
+  if (state.mapDisplay === 'height') {
+    search.placeholder = 'Filter: height / levels / source'
+  } else if (state.mapDisplay === 'height-confidence') {
+    search.placeholder = 'Filter: explicit / estimated / unavailable'
+  } else {
+    search.placeholder = 'Filter: park / garden / height'
+  }
+
+  restyleRooftops(state.rooftops)
   renderSidebar()
 }
 
@@ -342,6 +375,11 @@ detectBtn.addEventListener('click', async () => {
     )
     await nextPaint()
     const rooftops = buildRooftops(shapes)
+    const heightSummary = summariseHeights(rooftops)
+    writeLog(
+      `Height coverage: ${Math.round(heightSummary.coveragePercent)}% (${heightSummary.explicit} explicit, ${heightSummary.estimated} estimated from levels, ${heightSummary.missing} unavailable).`,
+      heightSummary.coveragePercent >= 50 ? 'success' : 'warning',
+    )
 
     if (rooftops.length === 0) {
       hint.textContent = 'No usable rooftops found here — try a larger area.'
@@ -355,7 +393,7 @@ detectBtn.addEventListener('click', async () => {
 
     updateLoading(
       'Clustering rooftop types',
-      `Grouping ${rooftops.length.toLocaleString()} rooftops by their spatial characteristics…`,
+      `Grouping ${rooftops.length.toLocaleString()} rooftops by footprint, context and available height…`,
       76,
     )
     await nextPaint()
@@ -385,11 +423,11 @@ detectBtn.addEventListener('click', async () => {
     )
     await nextPaint()
     drawRooftops(rooftops)
-    renderSidebar()
     search.disabled = false
-    toggleBtn.disabled = false
+    mapDisplaySelect.disabled = false
+    updateMapDisplayUI()
 
-    hint.textContent = `${rooftops.length} rooftops analysed.`
+    hint.textContent = `${rooftops.length} rooftops analysed. Height coverage: ${Math.round(heightSummary.coveragePercent)}%.`
     writeLog(`${rooftops.length} rooftops analysed successfully.`, 'success')
     await completeLoading(
       'Analysis complete',
@@ -408,9 +446,22 @@ detectBtn.addEventListener('click', async () => {
 })
 
 toggleBtn.addEventListener('click', () => {
+  if (state.mapDisplay !== 'proposal') return
   state.showAfter = !state.showAfter
   toggleBtn.textContent = state.showAfter ? 'Show: After' : 'Show: Before'
   restyleRooftops(state.rooftops)
+})
+
+mapDisplaySelect.addEventListener('change', () => {
+  state.mapDisplay = mapDisplaySelect.value as MapDisplayMode
+  updateMapDisplayUI()
+  writeLog(
+    state.mapDisplay === 'height'
+      ? 'Map changed to building height (relative roof Z).'
+      : state.mapDisplay === 'height-confidence'
+        ? 'Map changed to height-data confidence.'
+        : 'Map changed to the greening proposal.',
+  )
 })
 
 search.addEventListener('input', () => {

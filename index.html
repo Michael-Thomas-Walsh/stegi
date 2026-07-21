@@ -121,12 +121,20 @@
           disabled
         />
 
+        <label class="field-label" for="map-display">Map display</label>
+        <select id="map-display" disabled>
+          <option value="proposal">Greening proposal</option>
+          <option value="height">Building height (relative Z)</option>
+          <option value="height-confidence">Height data confidence</option>
+        </select>
+
         <button id="toggle-view" type="button" class="secondary" disabled>
           Show: After
         </button>
 
         <p class="helper-text">
           Detection is enabled only after the boundary above has been confirmed.
+          Relative Z is measured above local ground rather than above sea level.
         </p>
       </section>
 
@@ -143,6 +151,25 @@
     </aside>
 
     <div id="map"></div>
+
+    <aside id="height-legend" class="map-data-legend" aria-label="Building height legend" hidden>
+      <strong>Building height</strong>
+      <span class="legend-subtitle">Relative roof Z above local ground</span>
+      <div class="legend-row"><i style="--swatch:#dceff4"></i><span>0–6 m</span></div>
+      <div class="legend-row"><i style="--swatch:#a9d4df"></i><span>6–12 m</span></div>
+      <div class="legend-row"><i style="--swatch:#70b4c6"></i><span>12–18 m</span></div>
+      <div class="legend-row"><i style="--swatch:#367f9a"></i><span>18–30 m</span></div>
+      <div class="legend-row"><i style="--swatch:#17475d"></i><span>30 m+</span></div>
+      <div class="legend-row"><i class="unknown-swatch"></i><span>No height data</span></div>
+    </aside>
+
+    <aside id="height-confidence-legend" class="map-data-legend" aria-label="Height data confidence legend" hidden>
+      <strong>Height data confidence</strong>
+      <span class="legend-subtitle">Source of the relative roof Z value</span>
+      <div class="legend-row"><i style="--swatch:#2f6f45"></i><span>High: OSM height tag</span></div>
+      <div class="legend-row"><i style="--swatch:#d18a32"></i><span>Medium: estimated from levels</span></div>
+      <div class="legend-row"><i class="unknown-swatch"></i><span>Unavailable</span></div>
+    </aside>
 
     <div
       id="loading-overlay"

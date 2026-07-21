@@ -6,6 +6,11 @@ import 'leaflet/dist/leaflet.css'
 import type { Rooftop } from './state'
 import { state } from './state'
 import { COLORS } from './constants'
+import {
+  confidenceColour,
+  heightColour,
+  heightSourceLabel,
+} from './height'
 import { installBasemaps } from './basemap'
 import {
   ATHENS_CENTER,
@@ -360,24 +365,57 @@ export function drawRooftops(rooftops: Rooftop[]): void {
     )
 
     const layer = L.polygon(latlngs, roofStyle(rooftop)).addTo(map)
+    layer.bindTooltip(roofTooltip(rooftop), { sticky: true, direction: 'top' })
     layer.on('click', () => onRoofClick?.(rooftop.id))
     roofLayers.set(rooftop.id, layer)
   }
 }
 
+function searchableRoofText(rooftop: Rooftop): string {
+  return [
+    rooftop.greenType,
+    rooftop.heightSource,
+    heightSourceLabel(rooftop.heightSource),
+    rooftop.heightConfidence,
+    rooftop.osmTags.name ?? '',
+    rooftop.osmTags.building ?? '',
+    rooftop.heightM?.toFixed(1) ?? '',
+    rooftop.buildingLevels?.toString() ?? '',
+  ]
+    .join(' ')
+    .toLowerCase()
+}
+
+function roofFill(rooftop: Rooftop): string {
+  if (state.mapDisplay === 'height') return heightColour(rooftop.heightM)
+  if (state.mapDisplay === 'height-confidence') {
+    return confidenceColour(rooftop.heightConfidence)
+  }
+  return state.showAfter ? COLORS[rooftop.greenType] : COLORS.BEFORE
+}
+
+function roofTooltip(rooftop: Rooftop): string {
+  const height =
+    rooftop.heightM === null ? 'No height data' : `${rooftop.heightM.toFixed(1)} m`
+  return `<strong>Relative roof Z: ${height}</strong><br>${heightSourceLabel(rooftop.heightSource)}`
+}
+
 function roofStyle(rooftop: Rooftop): L.PathOptions {
-  const fill = state.showAfter ? COLORS[rooftop.greenType] : COLORS.BEFORE
+  const fill = roofFill(rooftop)
   const selected = rooftop.id === state.selectedId
-  const matches =
-    state.filter === '' ||
-    rooftop.greenType.toLowerCase().includes(state.filter.toLowerCase())
+  const query = state.filter.trim().toLowerCase()
+  const matches = query === '' || searchableRoofText(rooftop).includes(query)
+  const missingHeight =
+    (state.mapDisplay === 'height' || state.mapDisplay === 'height-confidence') &&
+    rooftop.heightM === null
 
   return {
-    color: selected ? COLORS.SELECTED : fill,
-    weight: selected ? 3 : 1,
+    color: selected ? COLORS.SELECTED : missingHeight ? '#777a78' : '#3e4b50',
+    weight: selected ? 3 : missingHeight ? 1.5 : 1,
+    dashArray: missingHeight ? '4 3' : '',
     fillColor: fill,
-    fillOpacity: matches ? 0.7 : 0.15,
-    opacity: matches ? 1 : 0.3,
+    fillOpacity: matches ? (missingHeight ? 0.48 : 0.78) : 0.14,
+    opacity: matches ? 1 : 0.28,
   }
 }
 

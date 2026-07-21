@@ -32,6 +32,7 @@ interface OverpassGeometryPoint {
 }
 
 interface OverpassElement {
+  id?: number
   type: string
   geometry?: OverpassGeometryPoint[]
   tags?: Record<string, string>
@@ -63,6 +64,8 @@ export type OsmProgressCallback = (event: OsmProgressEvent) => void
 export interface OsmShape {
   polygon: GeoJSON.Feature<GeoJSON.Polygon>
   isGreen: boolean
+  osmId: number | null
+  tags: Record<string, string>
 }
 
 function errorMessage(error: unknown): string {
@@ -151,10 +154,11 @@ export async function fetchShapes(
 
   onProgress?.({
     stage: 'query',
-    message: 'Preparing the OpenStreetMap query for the confirmed boundary…',
+    message: 'Preparing the OpenStreetMap query for footprints and height tags…',
   })
 
-  // Overpass expects latitude/longitude pairs in one polygon string.
+  // Overpass expects latitude/longitude pairs in one polygon string. `out geom`
+  // returns both the geometry and the OSM tags, including height and levels.
   const polyStr = boundary.map(([lat, lng]) => `${lat} ${lng}`).join(' ')
   const query = `
     [out:json][timeout:25];
@@ -171,7 +175,7 @@ export async function fetchShapes(
 
   onProgress?.({
     stage: 'processing',
-    message: 'Converting OpenStreetMap geometry into usable footprints…',
+    message: 'Converting map geometry and retaining building height attributes…',
     elementCount: elements.length,
   })
 
@@ -203,6 +207,8 @@ export async function fetchShapes(
       shapes.push({
         polygon: turf.polygon([ring]),
         isGreen,
+        osmId: typeof element.id === 'number' ? element.id : null,
+        tags: { ...tags },
       })
     } catch {
       // Ignore malformed OSM rings rather than failing the whole study area.
@@ -211,7 +217,7 @@ export async function fetchShapes(
 
   onProgress?.({
     stage: 'complete',
-    message: `${shapes.length.toLocaleString()} valid map shapes prepared for analysis.`,
+    message: `${shapes.length.toLocaleString()} valid map shapes prepared, including available height tags.`,
     elementCount: elements.length,
     shapeCount: shapes.length,
   })

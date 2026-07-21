@@ -733,3 +733,111 @@ input[type='search'] {
   filter: drop-shadow(0 1px 0 rgb(255 255 252 / 86%));
   vector-effect: non-scaling-stroke;
 }
+
+/* --- Step 5: building height / relative Z visualisation --- */
+.height-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+  padding: 0.6rem;
+  border: 1px solid #d6d6d2;
+  border-radius: 8px;
+  background: #f7f7f5;
+}
+
+.height-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+
+.height-summary strong {
+  font-size: 0.98rem;
+}
+
+.height-summary span,
+.height-summary p {
+  color: #5e5e59;
+  font-size: 0.7rem;
+}
+
+.height-summary p {
+  grid-column: 1 / -1;
+  padding-top: 0.35rem;
+  border-top: 1px solid #deded9;
+}
+
+.detail-note {
+  margin-top: 0.7rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid #d8d8d2;
+  color: #666;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.map-data-legend {
+  position: fixed;
+  z-index: 950;
+  right: 1rem;
+  bottom: 2.5rem;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(65 70 68 / 24%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 8px 28px rgb(20 30 25 / 14%);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.map-data-legend strong {
+  font-size: 0.82rem;
+}
+
+.legend-subtitle {
+  margin-top: -0.25rem;
+  color: #686d69;
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 0.48rem;
+  color: #404542;
+  font-size: 0.72rem;
+}
+
+.legend-row i {
+  width: 1.4rem;
+  height: 0.72rem;
+  flex: 0 0 auto;
+  border: 1px solid rgb(45 50 48 / 34%);
+  border-radius: 2px;
+  background: var(--swatch);
+}
+
+.legend-row .unknown-swatch {
+  background-color: #b8bab8;
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgb(75 78 76 / 32%) 0,
+    rgb(75 78 76 / 32%) 1px,
+    transparent 1px,
+    transparent 5px
+  );
+}
+
+@media (max-width: 760px) {
+  .map-data-legend {
+    right: 0.6rem;
+    bottom: 1.9rem;
+    width: 190px;
+  }
+}
