@@ -1,85 +1,206 @@
 # STÉGI — The Invisible City
 
-A rooftop-greening tool for a cooler Athens.
+**Athens, but make it cooler.**
 
-Athens is short on green space and heavy on urban heat — while thousands of
-flat rooftops sit bare and hot. **STÉGI** reads those rooftops from map
-data, groups them into typologies with machine learning, turns each into a
-green space (a **park** or a **garden**), and puts a number on the payoff:
-how much a neighbourhood is cooled (°C) and what it costs (€) — so a city
-can see where to spend first.
+STÉGI is a browser-based rooftop analysis tool for Greater Athens. It lets a user find a site, define and confirm a study boundary, retrieve building footprints, inspect relative building heights, group rooftops into typologies, and test indicative greening and cooling strategies.
 
-Everything runs in your browser. No backend, no accounts, no API keys.
+> **Prototype notice:** cooling, cost and machine-learning-derived building-height values are indicative. They are not surveyed or certified engineering data.
 
-> ⚠️ The cooling and cost figures are **illustrative estimates** for a
-> workshop prototype, not certified engineering numbers. OpenStreetMap has
-> no reliable building-height data, so everything downstream is an
-> approximation.
+## Current workflow
 
-## What it does
+1. Search for an address within Greater Athens.
+2. Define a boundary by drawing a rectangle, drawing a polygon, or uploading a zipped shapefile.
+3. Confirm the boundary.
+4. Detect OpenStreetMap building footprints.
+5. Read explicit OSM heights and levels where available.
+6. Enrich missing values with GlobalBuildingAtlas height data.
+7. Display greening, relative building height, or height-data confidence.
+8. Review rooftop groups, indicative cooling and indicative cost results.
 
-1. **Draw an area** — drag a box over a neighbourhood on the map.
-2. **Detect rooftops** — fetches real building footprints from
-   OpenStreetMap (Overpass API) and keeps the ones big enough to matter.
-3. **Cluster them** — a hand-written k-means groups roofs by size, shape,
-   density, and distance to existing green.
-4. **Assign a green type** — the biggest, densest, greenery-starved cluster
-   becomes **PARK**; the rest become **GARDEN**.
-5. **Cost it out** — each roof gets a cooling (°C) and cost (€) estimate,
-   and roofs are ranked by cost-effectiveness (€ per °C).
-6. **See before → after** — the map colours roofs by green type, with a
-   toggle back to the grey "before" state, a live tally, and click-a-roof
-   details.
+## Requirements
 
-## Run it locally
+- **Node.js 22.12 or newer**
+- npm, included with Node.js
+- A current Chromium-based browser such as Chrome or Edge
+- An internet connection for maps, geocoding, OSM and GlobalBuildingAtlas queries
 
-Requires [Node.js](https://nodejs.org) 20 or newer.
+Detailed package and troubleshooting notes are in [DEPENDENCIES.md](DEPENDENCIES.md).
 
-```bash
+## Install
+
+Clone or download the project, open its root folder in Visual Studio Code, and run:
+
+```powershell
 npm install
 npm run dev
 ```
 
-Then open the URL it prints (usually http://localhost:5173) and drag a box
-anywhere in Athens.
+Open the local URL printed by Vite, normally:
 
-To make a production build:
-
-```bash
-npm run build     # outputs to dist/
-npm run preview   # serve the built version locally
+```text
+http://localhost:5173/
 ```
 
-## How it's built
+## Required npm packages
 
-Three languages, no frameworks — plus two mapping libraries.
+A normal `npm install` should install everything recorded in `package.json`.
 
-| Area | Tech |
+The application currently relies on these runtime packages:
+
+```text
+@duckdb/node-api             1.5.4-r.1
+@maplibre/maplibre-gl-leaflet 0.1.3
+@turf/turf
+leaflet
+maplibre-gl                  5.24.0
+shpjs                        6.2.0
+```
+
+Development packages include:
+
+```text
+@types/leaflet
+typescript
+vite
+```
+
+To repair a local installation where one or more dependencies are missing:
+
+```powershell
+npm install @duckdb/node-api@1.5.4-r.1 `
+  @maplibre/maplibre-gl-leaflet@0.1.3 `
+  @turf/turf `
+  leaflet `
+  maplibre-gl@5.24.0 `
+  shpjs@6.2.0
+
+npm install --save-dev @types/leaflet typescript vite
+```
+
+Do not request `@duckdb/node-api@^1.5.4`; that exact semantic-version target does not exist. Use:
+
+```powershell
+npm install @duckdb/node-api@1.5.4-r.1
+```
+
+## Clean reinstall
+
+Use this when Vite reports an unresolved package even though it appears in `package.json`:
+
+```powershell
+Ctrl + C
+
+Remove-Item -Recurse -Force node_modules
+Remove-Item -Recurse -Force "node_modules\.vite-temp" -ErrorAction SilentlyContinue
+Remove-Item -Force package-lock.json -ErrorAction SilentlyContinue
+
+npm install
+npm run dev
+```
+
+Normally, keep `package-lock.json`. Delete it only when repairing a broken or incompatible dependency installation.
+
+## Build and preview
+
+```powershell
+npm run build
+npm run preview
+```
+
+The production build is written to:
+
+```text
+dist/
+```
+
+## Runtime data services
+
+STÉGI uses external services and datasets at runtime:
+
+- **Nominatim** for address search
+- **OpenStreetMap Overpass** for building footprints and tags
+- **MapLibre/OpenFreeMap map tiles** for the vector basemap
+- **GlobalBuildingAtlas LoD1** for machine-learning-derived building heights
+- **Microsoft Global ML Building Footprints**, where retained as a secondary fallback
+
+The first GlobalBuildingAtlas request can take longer because DuckDB may initialise its `httpfs` and `spatial` extensions and query a remote Parquet tile. Those extensions are loaded by the application and are not separate npm packages.
+
+## Building-height hierarchy
+
+STÉGI prioritises height data in this order:
+
+1. Explicit OSM `height`
+2. OSM `building:levels`, converted to an indicative height
+3. GlobalBuildingAtlas footprint containing the OSM building centroid
+4. Additional overlap and positional matching
+5. Microsoft-derived height, where enabled
+6. Optional neighbourhood estimate for unresolved buildings
+
+The displayed value is **relative roof height above local ground**, not absolute elevation above sea level.
+
+## Troubleshooting
+
+### `crypto.hash is not a function`
+
+Your Node.js version is too old for the installed Vite version.
+
+```powershell
+node --version
+```
+
+Install Node.js 22.12 or newer, fully close VS Code, then reopen the project.
+
+### `ERR_MODULE_NOT_FOUND: @duckdb/node-api`
+
+```powershell
+npm install @duckdb/node-api@1.5.4-r.1
+Remove-Item -Recurse -Force "node_modules\.vite-temp" -ErrorAction SilentlyContinue
+npm run dev
+```
+
+### `ETARGET No matching version found for @duckdb/node-api@^1.5.4`
+
+Remove or replace the invalid version in `package.json`:
+
+```powershell
+npm pkg set "dependencies.@duckdb/node-api=1.5.4-r.1"
+npm install
+```
+
+### Check installed versions
+
+```powershell
+node --version
+npm --version
+npm list --depth=0
+```
+
+### Clear the GlobalBuildingAtlas query cache
+
+Use this only when testing a revised GBA query or matching method:
+
+```powershell
+Remove-Item -Recurse -Force "$env:TEMP\stegi-gba-height-cache-v2" -ErrorAction SilentlyContinue
+```
+
+Then restart Vite.
+
+## Main technologies
+
+| Area | Technology |
 |---|---|
-| Structure | HTML (`index.html`) |
-| Appearance | CSS (`src/style.css`) |
-| Behaviour | TypeScript (`src/*.ts`) |
-| Map | [Leaflet](https://leafletjs.com) |
-| Geometry | [Turf.js](https://turfjs.org) |
-| Rooftop data | [OpenStreetMap](https://www.openstreetmap.org) via the Overpass API |
+| Structure | HTML |
+| Styling | CSS |
+| Application logic | TypeScript |
+| Development server/build | Vite |
+| Interactive 2D map | Leaflet |
+| Vector basemap | MapLibre GL through the Leaflet adapter |
+| Geometry operations | Turf.js |
+| Shapefile input | Shapefile.js (`shpjs`) |
+| Remote analytical queries | DuckDB Node API |
+| Building footprints | OpenStreetMap |
+| Height enrichment | GlobalBuildingAtlas |
 
-The code is split into small, single-job files: `map.ts` (the map + drawing),
-`osm.ts` (fetching data), `features.ts` (turning roofs into numbers),
-`cluster.ts` (k-means), `greenType.ts` (PARK/GARDEN rules), `cooling.ts`
-(the °C/€ maths), and `sidebar.ts` (the list + details).
+## Data and licensing note
 
-## Documentation
-
-The `docs/` folder holds the thinking behind the app:
-
-- `docs/plan/` — the plan from the user's point of view: the PRD and user
-  stories.
-- `docs/architecture.md` — how the app actually works (files, data flow,
-  decisions).
-- `docs/frontend.md` — layout, colours, and interactions.
-
-## Credits
-
-Built at the GSS26 workshop as a first project, with an AI coding agent,
-from the [vibecoding-starter](https://github.com/Infrared-city/vibecoding-starter)
-template.
+Check the licence and attribution requirements of every external dataset before public deployment or commercial use. GlobalBuildingAtlas height data should remain visibly identified as model-derived rather than surveyed data.
