@@ -1,7 +1,24 @@
 import type { Rooftop } from './state'
 
-export type HeightSource = 'osm-height' | 'osm-levels' | 'missing'
-export type HeightConfidence = 'high' | 'medium' | 'none'
+export type HeightSource =
+  | 'osm-height'
+  | 'osm-levels'
+  | 'global-building-atlas'
+  | 'microsoft-ml'
+  | 'neighbourhood-estimate'
+  | 'missing'
+export type HeightConfidence = 'high' | 'medium' | 'low' | 'none'
+
+export type HeightMatchMethod =
+  | 'osm-centroid-within-external'
+  | 'direct-osm-id'
+  | 'one-to-one-overlap'
+  | 'area-weighted-overlap'
+  | 'centroid-containment'
+  | 'grid-sampled-lod1'
+  | 'buffered-proximity'
+  | 'neighbourhood'
+
 
 export interface BuildingHeightData {
   heightM: number | null
@@ -43,15 +60,25 @@ export function parseHeightMetres(raw: string | undefined): number | null {
   if (feetMatch) {
     const feet = normaliseNumber(feetMatch[1])
     if (feet === null) return null
-    return finiteWithin(feet * 0.3048, MIN_REASONABLE_HEIGHT_M, MAX_REASONABLE_HEIGHT_M)
+    return finiteWithin(
+      feet * 0.3048,
+      MIN_REASONABLE_HEIGHT_M,
+      MAX_REASONABLE_HEIGHT_M,
+    )
   }
 
-  const metreMatch = value.match(/^([+-]?\d+(?:[.,]\d+)?)\s*(?:m|metre|metres|meter|meters)?$/)
+  const metreMatch = value.match(
+    /^([+-]?\d+(?:[.,]\d+)?)\s*(?:m|metre|metres|meter|meters)?$/,
+  )
   if (!metreMatch) return null
 
   const metres = normaliseNumber(metreMatch[1])
   if (metres === null) return null
-  return finiteWithin(metres, MIN_REASONABLE_HEIGHT_M, MAX_REASONABLE_HEIGHT_M)
+  return finiteWithin(
+    metres,
+    MIN_REASONABLE_HEIGHT_M,
+    MAX_REASONABLE_HEIGHT_M,
+  )
 }
 
 export function parseLevels(raw: string | undefined): number | null {
@@ -82,7 +109,8 @@ export function deriveBuildingHeight(
 
   if (levels !== null) {
     const roofAllowance =
-      roofHeightM ?? (roofLevels !== null ? roofLevels * DEFAULT_ROOF_LEVEL_HEIGHT_M : 0)
+      roofHeightM ??
+      (roofLevels !== null ? roofLevels * DEFAULT_ROOF_LEVEL_HEIGHT_M : 0)
     const estimated = levels * DEFAULT_STOREY_HEIGHT_M + roofAllowance
 
     return {
@@ -112,13 +140,50 @@ export function deriveBuildingHeight(
 export function heightSourceLabel(source: HeightSource): string {
   if (source === 'osm-height') return 'OSM height tag'
   if (source === 'osm-levels') return 'Estimated from OSM levels'
+  if (source === 'global-building-atlas') {
+    return 'GlobalBuildingAtlas satellite-derived height'
+  }
+  if (source === 'microsoft-ml') return 'Microsoft imagery-derived height'
+  if (source === 'neighbourhood-estimate') {
+    return 'Estimated from nearby buildings'
+  }
   return 'No height data'
+}
+
+
+export function heightMatchMethodLabel(
+  method: HeightMatchMethod | null,
+): string {
+  if (method === 'osm-centroid-within-external') {
+    return 'OSM footprint centroid within external building footprint'
+  }
+  if (method === 'direct-osm-id') return 'Direct OSM ID link'
+  if (method === 'one-to-one-overlap') return 'Strong one-to-one overlap'
+  if (method === 'area-weighted-overlap') return 'Area-weighted multi-footprint overlap'
+  if (method === 'centroid-containment') return 'Centroid containment'
+  if (method === 'grid-sampled-lod1') return '3 m-style LoD1 grid sampling'
+  if (method === 'buffered-proximity') return 'Buffered proximity match'
+  if (method === 'neighbourhood') return 'Nearby-building estimate'
+  return 'Not applicable'
 }
 
 export function heightConfidenceLabel(confidence: HeightConfidence): string {
   if (confidence === 'high') return 'High'
   if (confidence === 'medium') return 'Medium'
+  if (confidence === 'low') return 'Low'
   return 'Unavailable'
+}
+
+export function globalBuildingAtlasSourceLabel(
+  source: string | null,
+): string {
+  if (!source) return 'Not supplied'
+  if (source === 'osm') return 'OpenStreetMap-derived footprint'
+  if (source === 'ms') return 'Microsoft-derived footprint'
+  if (source === 'google') return 'Google Open Buildings footprint'
+  if (source === 'ours2') return 'TUM satellite-derived footprint'
+  if (source === '3dglobfp') return '3D Global Footprints source'
+  return source
 }
 
 export const HEIGHT_LEGEND_BINS = [
@@ -131,12 +196,15 @@ export const HEIGHT_LEGEND_BINS = [
 
 export function heightColour(heightM: number | null): string {
   if (heightM === null) return '#b8bab8'
-  return HEIGHT_LEGEND_BINS.find((bin) => heightM < bin.max)?.colour ?? '#17475d'
+  return (
+    HEIGHT_LEGEND_BINS.find((bin) => heightM < bin.max)?.colour ?? '#17475d'
+  )
 }
 
 export function confidenceColour(confidence: HeightConfidence): string {
   if (confidence === 'high') return '#2f6f45'
   if (confidence === 'medium') return '#d18a32'
+  if (confidence === 'low') return '#7f6aa5'
   return '#a6a8a6'
 }
 
@@ -144,6 +212,9 @@ export interface HeightSummary {
   total: number
   explicit: number
   estimated: number
+  globalBuildingAtlas: number
+  microsoft: number
+  inferred: number
   missing: number
   known: number
   coveragePercent: number
@@ -152,9 +223,24 @@ export interface HeightSummary {
 }
 
 export function summariseHeights(rooftops: Rooftop[]): HeightSummary {
-  const explicit = rooftops.filter((roof) => roof.heightSource === 'osm-height').length
-  const estimated = rooftops.filter((roof) => roof.heightSource === 'osm-levels').length
-  const missing = rooftops.filter((roof) => roof.heightSource === 'missing').length
+  const explicit = rooftops.filter(
+    (roof) => roof.heightSource === 'osm-height',
+  ).length
+  const estimated = rooftops.filter(
+    (roof) => roof.heightSource === 'osm-levels',
+  ).length
+  const globalBuildingAtlas = rooftops.filter(
+    (roof) => roof.heightSource === 'global-building-atlas',
+  ).length
+  const microsoft = rooftops.filter(
+    (roof) => roof.heightSource === 'microsoft-ml',
+  ).length
+  const inferred = rooftops.filter(
+    (roof) => roof.heightSource === 'neighbourhood-estimate',
+  ).length
+  const missing = rooftops.filter(
+    (roof) => roof.heightSource === 'missing',
+  ).length
   const values = rooftops
     .map((roof) => roof.heightM)
     .filter((value): value is number => value !== null)
@@ -174,6 +260,9 @@ export function summariseHeights(rooftops: Rooftop[]): HeightSummary {
     total: rooftops.length,
     explicit,
     estimated,
+    globalBuildingAtlas,
+    microsoft,
+    inferred,
     missing,
     known,
     coveragePercent: rooftops.length ? (known / rooftops.length) * 100 : 0,

@@ -5,8 +5,10 @@ import type { Rooftop } from './state'
 import { state } from './state'
 import { totalsFor } from './cooling'
 import {
+  globalBuildingAtlasSourceLabel,
   heightColour,
   heightConfidenceLabel,
+  heightMatchMethodLabel,
   heightSourceLabel,
   summariseHeights,
 } from './height'
@@ -28,6 +30,8 @@ const euro = (value: number): string =>
 const num = (value: number, digits = 0): string =>
   value.toLocaleString('en-GB', { maximumFractionDigits: digits })
 
+const percent = (value: number): string => `${Math.round(value * 100)}%`
+
 const heightText = (heightM: number | null): string =>
   heightM === null ? 'No height data' : `${num(heightM, 1)} m`
 
@@ -41,6 +45,8 @@ function searchableText(rooftop: Rooftop): string {
     rooftop.osmTags.building ?? '',
     rooftop.buildingLevels?.toString() ?? '',
     rooftop.heightM?.toFixed(1) ?? '',
+    rooftop.heightInferenceNeighbours?.toString() ?? '',
+    rooftop.heightDatasetSource ?? '',
   ]
     .join(' ')
     .toLowerCase()
@@ -57,20 +63,24 @@ function visibleRooftops(): Rooftop[] {
 function rankedRooftops(rooftops: Rooftop[]): Rooftop[] {
   if (state.mapDisplay === 'height') {
     return [...rooftops].sort(
-      (a, b) => (b.heightM ?? Number.NEGATIVE_INFINITY) - (a.heightM ?? Number.NEGATIVE_INFINITY),
+      (a, b) =>
+        (b.heightM ?? Number.NEGATIVE_INFINITY) -
+        (a.heightM ?? Number.NEGATIVE_INFINITY),
     )
   }
 
   if (state.mapDisplay === 'height-confidence') {
-    const rank = { high: 0, medium: 1, none: 2 } as const
+    const rank = { high: 0, medium: 1, low: 2, none: 3 } as const
     return [...rooftops].sort(
       (a, b) => rank[a.heightConfidence] - rank[b.heightConfidence],
     )
   }
 
   return [...rooftops].sort((a, b) => {
-    const aValue = a.coolingC > 0 ? a.costEur / a.coolingC : Number.POSITIVE_INFINITY
-    const bValue = b.coolingC > 0 ? b.costEur / b.coolingC : Number.POSITIVE_INFINITY
+    const aValue =
+      a.coolingC > 0 ? a.costEur / a.coolingC : Number.POSITIVE_INFINITY
+    const bValue =
+      b.coolingC > 0 ? b.costEur / b.coolingC : Number.POSITIVE_INFINITY
     return aValue - bValue
   })
 }
@@ -100,6 +110,7 @@ function rowColour(rooftop: Rooftop): string {
   if (state.mapDisplay === 'height-confidence') {
     if (rooftop.heightConfidence === 'high') return '#2f6f45'
     if (rooftop.heightConfidence === 'medium') return '#d18a32'
+    if (rooftop.heightConfidence === 'low') return '#7f6aa5'
     return '#a6a8a6'
   }
   return rooftop.greenType === 'PARK' ? '#1b5e20' : '#8bc34a'
@@ -134,11 +145,18 @@ export function renderSidebar(): void {
       </div>
       <div>
         <strong>${heights.averageKnownM === null ? '—' : `${num(heights.averageKnownM, 1)} m`}</strong>
-        <span>average known height</span>
+        <span>average height</span>
       </div>
-      <p>${heights.explicit} explicit · ${heights.estimated} estimated · ${heights.missing} unavailable</p>
+      <p>
+        ${heights.explicit} OSM explicit ·
+        ${heights.estimated} OSM levels ·
+        ${heights.globalBuildingAtlas} GlobalBuildingAtlas ·
+        ${heights.microsoft} Microsoft ML ·
+        ${heights.inferred} local estimate ·
+        ${heights.missing} unavailable
+      </p>
     </div>
-    <p class="disclaimer">Cooling and cost are illustrative estimates. Height is relative to local ground, not elevation above sea level.</p>
+    <p class="disclaimer">Cooling and cost are illustrative estimates. Heights are relative to local ground. GlobalBuildingAtlas and Microsoft values are machine-learning estimates, not surveyed LiDAR. GlobalBuildingAtlas data is licensed for non-commercial use.</p>
   `
 
   list.innerHTML = ''
@@ -175,17 +193,70 @@ function detailValue(value: string): string {
     .replaceAll("'", '&#039;')
 }
 
+function provenanceRows(rooftop: Rooftop): string {
+  const match =
+    rooftop.heightMatchScore === null
+      ? 'Not recorded'
+      : percent(rooftop.heightMatchScore)
+  const method = heightMatchMethodLabel(rooftop.heightMatchMethod)
+  const candidates = rooftop.heightMatchCandidates ?? '—'
+
+  if (rooftop.heightSource === 'global-building-atlas') {
+    const variance =
+      rooftop.heightDatasetVariance === null
+        ? 'Not supplied'
+        : num(rooftop.heightDatasetVariance, 2)
+    const source = globalBuildingAtlasSourceLabel(rooftop.heightDatasetSource)
+
+    return `
+      <dt>Match method</dt><dd>${detailValue(method)}</dd>
+      <dt>Match score</dt><dd>${match}</dd>
+      <dt>Height candidates used</dt><dd>${candidates}</dd>
+      <dt>GBA footprint source</dt><dd>${detailValue(source)}</dd>
+      <dt>Prediction variance</dt><dd>${variance}</dd>
+      <dt>GBA source ID</dt><dd>${detailValue(rooftop.heightDatasetId ?? 'Not supplied')}</dd>
+    `
+  }
+
+  if (rooftop.heightSource === 'microsoft-ml') {
+    const footprintConfidence =
+      rooftop.heightDatasetConfidence === null
+        ? 'Not supplied'
+        : percent(rooftop.heightDatasetConfidence)
+
+    return `
+      <dt>Match method</dt><dd>${detailValue(method)}</dd>
+      <dt>Match score</dt><dd>${match}</dd>
+      <dt>Height candidates used</dt><dd>${candidates}</dd>
+      <dt>Microsoft footprint confidence</dt><dd>${footprintConfidence}</dd>
+    `
+  }
+
+  if (rooftop.heightSource === 'neighbourhood-estimate') {
+    return `
+      <dt>Match method</dt><dd>${detailValue(method)}</dd>
+      <dt>Nearby heights used</dt><dd>${rooftop.heightInferenceNeighbours ?? '—'}</dd>
+    `
+  }
+
+  return ''
+}
+
 function renderDetail(): void {
-  const rooftop = state.rooftops.find((candidate) => candidate.id === state.selectedId)
+  const rooftop = state.rooftops.find(
+    (candidate) => candidate.id === state.selectedId,
+  )
   if (!rooftop) {
     detail.hidden = true
     return
   }
 
-  const osmReference = rooftop.osmId === null ? 'Unavailable' : `Way ${rooftop.osmId}`
-  const levels = rooftop.buildingLevels === null
-    ? 'Not tagged'
-    : num(rooftop.buildingLevels, 1)
+  const osmReference =
+    rooftop.osmId === null ? 'Unavailable' : `Way ${rooftop.osmId}`
+  const levels =
+    rooftop.buildingLevels === null
+      ? 'Not tagged'
+      : num(rooftop.buildingLevels, 1)
 
   detail.hidden = false
   detail.innerHTML = `
@@ -199,12 +270,13 @@ function renderDetail(): void {
       <dt>Building levels</dt><dd>${levels}</dd>
       <dt>Height source</dt><dd>${detailValue(heightSourceLabel(rooftop.heightSource))}</dd>
       <dt>Height confidence</dt><dd>${heightConfidenceLabel(rooftop.heightConfidence)}</dd>
+      ${provenanceRows(rooftop)}
       <dt>OSM reference</dt><dd>${osmReference}</dd>
       <dt>Cooling</dt><dd>${num(rooftop.coolingC, 2)} °C</dd>
       <dt>Cost</dt><dd>${euro(rooftop.costEur)}</dd>
       <dt>Cost per °C</dt><dd>${rooftop.coolingC > 0 ? euro(rooftop.costEur / rooftop.coolingC) : '—'}</dd>
     </dl>
-    <p class="detail-note">Relative roof Z is the building top above local ground. It is not an absolute terrain or sea-level elevation.</p>
+    <p class="detail-note">Relative roof Z is the building top above local ground. GlobalBuildingAtlas and Microsoft values are satellite/imagery-derived estimates. The grid-sampled method samples returned LoD1 polygons on an adaptive 3 m-style grid; it is not the raw GBA.Height GeoTIFF. Optional local estimates are inferred from neighbouring buildings. None should be treated as surveyed LiDAR.</p>
   `
 
   detail.scrollIntoView({ block: 'nearest' })

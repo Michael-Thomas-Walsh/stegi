@@ -9,6 +9,7 @@ import { COLORS } from './constants'
 import {
   confidenceColour,
   heightColour,
+  heightMatchMethodLabel,
   heightSourceLabel,
 } from './height'
 import { installBasemaps } from './basemap'
@@ -397,7 +398,17 @@ function roofFill(rooftop: Rooftop): string {
 function roofTooltip(rooftop: Rooftop): string {
   const height =
     rooftop.heightM === null ? 'No height data' : `${rooftop.heightM.toFixed(1)} m`
-  return `<strong>Relative roof Z: ${height}</strong><br>${heightSourceLabel(rooftop.heightSource)}`
+  const match =
+    rooftop.heightMatchMethod !== null
+      ? `<br>${heightMatchMethodLabel(rooftop.heightMatchMethod)}${
+          rooftop.heightMatchScore === null
+            ? ''
+            : ` · ${Math.round(rooftop.heightMatchScore * 100)}%`
+        }`
+      : rooftop.heightSource === 'neighbourhood-estimate'
+        ? `<br>Nearby heights used: ${rooftop.heightInferenceNeighbours ?? '—'}`
+        : ''
+  return `<strong>Relative roof Z: ${height}</strong><br>${heightSourceLabel(rooftop.heightSource)}${match}`
 }
 
 function roofStyle(rooftop: Rooftop): L.PathOptions {

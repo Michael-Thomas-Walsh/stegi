@@ -25,6 +25,11 @@ import {
 import { fetchShapes, type OsmProgressEvent } from './osm'
 import { buildRooftops } from './features'
 import { summariseHeights } from './height'
+import {
+  enrichMissingHeights,
+  type HeightEnrichmentProgress,
+  type HeightMatchBreakdown,
+} from './heightEnrichment'
 import { clusterRooftops } from './cluster'
 import { assignGreenTypes } from './greenType'
 import { computeCoolingAndCost } from './cooling'
@@ -74,6 +79,8 @@ const boundaryStatus =
   document.querySelector<HTMLElement>('#boundary-status')!
 
 const detectBtn = document.querySelector<HTMLButtonElement>('#detect')!
+const useNeighbourEstimates =
+  document.querySelector<HTMLInputElement>('#use-neighbour-estimates')!
 const toggleBtn =
   document.querySelector<HTMLButtonElement>('#toggle-view')!
 const search = document.querySelector<HTMLInputElement>('#search')!
@@ -347,6 +354,38 @@ function reportOsmProgress(event: OsmProgressEvent): void {
   writeLog(event.message, event.stage === 'retrying' ? 'warning' : 'info')
 }
 
+function reportHeightProgress(event: HeightEnrichmentProgress): void {
+  const title =
+    event.stage === 'gba-requesting'
+      ? 'Querying GlobalBuildingAtlas'
+      : event.stage === 'gba-matching'
+        ? 'Matching satellite-derived heights'
+        : event.stage === 'microsoft-requesting'
+          ? 'Checking the secondary height source'
+          : event.stage === 'microsoft-matching'
+            ? 'Matching Microsoft height footprints'
+            : event.stage === 'estimating'
+              ? 'Filling the remaining height gaps'
+              : event.stage === 'warning'
+                ? 'Height source unavailable'
+                : 'Height enrichment complete'
+
+  updateLoading(title, event.message, event.progress)
+  writeLog(event.message, event.stage === 'warning' ? 'warning' : 'info')
+}
+
+function heightMethodLog(breakdown: HeightMatchBreakdown): string {
+  return [
+    `${breakdown.centroidWithinExternal} centroid-within-footprint`,
+    `${breakdown.directOsmId} direct IDs`,
+    `${breakdown.oneToOneOverlap} strong overlaps`,
+    `${breakdown.areaWeightedOverlap} weighted overlaps`,
+    `${breakdown.centroidContainment} centroid matches`,
+    `${breakdown.gridSampledLod1} grid-sampled`,
+    `${breakdown.bufferedProximity} buffered`,
+  ].join(', ')
+}
+
 detectBtn.addEventListener('click', async () => {
   if (state.boundary.length < 3) {
     detectBtn.disabled = true
@@ -371,15 +410,10 @@ detectBtn.addEventListener('click', async () => {
     updateLoading(
       'Building the rooftop dataset',
       'Measuring footprint geometry and proximity to existing green space…',
-      68,
+      65,
     )
     await nextPaint()
     const rooftops = buildRooftops(shapes)
-    const heightSummary = summariseHeights(rooftops)
-    writeLog(
-      `Height coverage: ${Math.round(heightSummary.coveragePercent)}% (${heightSummary.explicit} explicit, ${heightSummary.estimated} estimated from levels, ${heightSummary.missing} unavailable).`,
-      heightSummary.coveragePercent >= 50 ? 'success' : 'warning',
-    )
 
     if (rooftops.length === 0) {
       hint.textContent = 'No usable rooftops found here — try a larger area.'
@@ -391,10 +425,55 @@ detectBtn.addEventListener('click', async () => {
       return
     }
 
+    const initialHeightSummary = summariseHeights(rooftops)
+    writeLog(
+      `Initial OSM height coverage: ${Math.round(initialHeightSummary.coveragePercent)}% (${initialHeightSummary.explicit} explicit, ${initialHeightSummary.estimated} estimated from levels, ${initialHeightSummary.missing} missing).`,
+      initialHeightSummary.coveragePercent >= 50 ? 'success' : 'warning',
+    )
+
+    const enrichment = await enrichMissingHeights(
+      rooftops,
+      reportHeightProgress,
+      { useNeighbourhoodEstimates: useNeighbourEstimates.checked },
+    )
+    if (enrichment.globalBuildingAtlasMatches > 0) {
+      writeLog(
+        `${enrichment.globalBuildingAtlasMatches} missing heights matched to GlobalBuildingAtlas (${heightMethodLog(enrichment.globalBuildingAtlasMethods)})${enrichment.globalBuildingAtlasCachedQuery ? ' using the local query cache' : ''}.`,
+        'success',
+      )
+    }
+    if (enrichment.microsoftMatches > 0) {
+      writeLog(
+        `${enrichment.microsoftMatches} remaining heights matched to Microsoft imagery-derived data (${heightMethodLog(enrichment.microsoftMethods)})${enrichment.microsoftCachedQuery ? ' using the local query cache' : ''}.`,
+        'success',
+      )
+    }
+    if (enrichment.neighbourhoodEstimates > 0) {
+      writeLog(
+        `${enrichment.neighbourhoodEstimates} final gaps estimated from nearby known buildings and marked low confidence.`,
+        'warning',
+      )
+    }
+    if (enrichment.globalBuildingAtlasWarning) {
+      writeLog(
+        `GlobalBuildingAtlas warning: ${enrichment.globalBuildingAtlasWarning}`,
+        'warning',
+      )
+    }
+    if (enrichment.microsoftWarning) {
+      writeLog(`Microsoft height warning: ${enrichment.microsoftWarning}`, 'warning')
+    }
+
+    const heightSummary = summariseHeights(rooftops)
+    writeLog(
+      `Final height coverage: ${Math.round(heightSummary.coveragePercent)}% (${heightSummary.explicit} OSM explicit, ${heightSummary.estimated} OSM levels, ${heightSummary.globalBuildingAtlas} GlobalBuildingAtlas, ${heightSummary.microsoft} Microsoft ML, ${heightSummary.inferred} local estimates, ${heightSummary.missing} unavailable).`,
+      heightSummary.coveragePercent >= 80 ? 'success' : 'warning',
+    )
+
     updateLoading(
       'Clustering rooftop types',
-      `Grouping ${rooftops.length.toLocaleString()} rooftops by footprint, context and available height…`,
-      76,
+      `Grouping ${rooftops.length.toLocaleString()} rooftops by footprint, context and enriched height…`,
+      82,
     )
     await nextPaint()
     clusterRooftops(rooftops)
@@ -402,7 +481,7 @@ detectBtn.addEventListener('click', async () => {
     updateLoading(
       'Assigning greening strategies',
       'Comparing rooftop clusters and identifying park and garden opportunities…',
-      84,
+      88,
     )
     await nextPaint()
     assignGreenTypes(rooftops)
@@ -410,7 +489,7 @@ detectBtn.addEventListener('click', async () => {
     updateLoading(
       'Estimating cooling and cost',
       'Calculating the illustrative before-and-after scenario…',
-      91,
+      93,
     )
     await nextPaint()
     computeCoolingAndCost(rooftops)
@@ -436,10 +515,10 @@ detectBtn.addEventListener('click', async () => {
   } catch (error) {
     const message = errorMessage(error)
     hint.textContent =
-      'Could not reach OpenStreetMap. Check your connection and try again.'
-    writeLog(`OpenStreetMap request failed: ${message}`, 'error')
+      'The analysis could not be completed. Check the project log and try again.'
+    writeLog(`Analysis failed: ${message}`, 'error')
     console.error(error)
-    await failLoading('Footprint detection failed', message)
+    await failLoading('Analysis failed', message)
   } finally {
     if (state.boundary.length >= 3) detectBtn.disabled = false
   }

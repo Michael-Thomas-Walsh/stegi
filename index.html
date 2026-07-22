@@ -132,9 +132,18 @@
           Show: After
         </button>
 
+        <label class="estimate-option" for="use-neighbour-estimates">
+          <input id="use-neighbour-estimates" type="checkbox" />
+          <span>
+            <strong>Use neighbourhood estimates for remaining gaps</strong>
+            <small>Optional low-confidence fallback. Off by default.</small>
+          </span>
+        </label>
+
         <p class="helper-text">
           Detection is enabled only after the boundary above has been confirmed.
-          Relative Z is measured above local ground rather than above sea level.
+          Heights use OSM first, then GlobalBuildingAtlas and Microsoft data.
+          Relative Z is above local ground.
         </p>
       </section>
 
@@ -167,7 +176,8 @@
       <strong>Height data confidence</strong>
       <span class="legend-subtitle">Source of the relative roof Z value</span>
       <div class="legend-row"><i style="--swatch:#2f6f45"></i><span>High: OSM height tag</span></div>
-      <div class="legend-row"><i style="--swatch:#d18a32"></i><span>Medium: estimated from levels</span></div>
+      <div class="legend-row"><i style="--swatch:#d18a32"></i><span>Medium: OSM levels, GBA or Microsoft ML</span></div>
+      <div class="legend-row"><i style="--swatch:#7f6aa5"></i><span>Low: nearby-building estimate</span></div>
       <div class="legend-row"><i class="unknown-swatch"></i><span>Unavailable</span></div>
     </aside>
 
@@ -207,8 +217,9 @@
         </aside>
 
         <p class="loading-note">
-          Public OpenStreetMap servers can occasionally be busy. STÉGI will
-          automatically try a backup server when needed.
+          Public OpenStreetMap servers can occasionally be busy. The first
+          GlobalBuildingAtlas request also installs DuckDB data extensions and
+          queries a remote GeoParquet tile; later identical queries are cached.
         </p>
 
         <p

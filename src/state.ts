@@ -3,7 +3,7 @@
 // Nothing upstream is ever rewritten.
 
 import type { GreenType } from './constants'
-import type { HeightConfidence, HeightSource } from './height'
+import type { HeightConfidence, HeightMatchMethod, HeightSource } from './height'
 
 export type MapDisplayMode = 'proposal' | 'height' | 'height-confidence'
 
@@ -33,6 +33,14 @@ export interface Rooftop {
   roofLevels: number | null
   heightSource: HeightSource
   heightConfidence: HeightConfidence
+  heightMatchScore: number | null
+  heightMatchMethod: HeightMatchMethod | null
+  heightMatchCandidates: number | null
+  heightDatasetConfidence: number | null
+  heightDatasetVariance: number | null
+  heightDatasetSource: string | null
+  heightDatasetId: string | null
+  heightInferenceNeighbours: number | null
 
   // Results:
   cluster: number // which typology this roof belongs to
