@@ -3,6 +3,7 @@
 import { state, type MapDisplayMode } from './state'
 import {
   cancelDrawingMode,
+  clearLocationMarker,
   clearMap,
   clearStudyArea,
   confirmPendingBoundary,
@@ -203,18 +204,26 @@ function updateBoundaryMethodUI(): void {
   }
 }
 
+// Clear the location marker when the user deletes the complete search value
+// or presses the browser's built-in clear button.
+addressInput.addEventListener('input', () => {
+  if (addressInput.value.trim() === '') {
+    clearLocationMarker()
+  }
+})
+
 addressForm.addEventListener('submit', async (event) => {
   event.preventDefault()
   const query = addressInput.value.trim()
   if (!query) {
-    hint.textContent = 'Enter an Athens address first.'
+    hint.textContent = 'Enter a Greater Athens address first.'
     writeLog('Address search skipped: no address was entered.', 'warning')
     return
   }
 
   addressGoBtn.disabled = true
-  hint.textContent = 'Searching within Athens…'
-  writeLog(`Searching for “${query}” within Athens…`)
+  hint.textContent = 'Searching within Greater Athens…'
+  writeLog(`Searching for “${query}” within Greater Athens…`)
 
   try {
     const result = await geocodeAthensAddress(query)

@@ -31,20 +31,43 @@
           <h2 id="location-heading">Find the site</h2>
         </div>
 
+        <div class="field-label-row">
+          <label class="field-label" for="address-search">
+            Address, postcode or landmark
+          </label>
+
+          <span
+            class="input-tooltip"
+            tabindex="0"
+            role="button"
+            aria-label="Show address search examples"
+          >
+            ?
+            <span class="input-tooltip-content" role="tooltip">
+              Enter one location at a time. Examples:
+              <strong>Syntagma Square</strong>,
+              <strong>Ermou 1, Athens</strong>,
+              <strong>106 79 Athens</strong>,
+              <strong>Piraeus Port</strong> or
+              <strong>Glyfada</strong>. You do not need to add “Greece”.
+            </span>
+          </span>
+        </div>
+
         <form id="address-form" class="input-row">
-          <label class="sr-only" for="address-search">Athens address</label>
           <input
             id="address-search"
             type="search"
-            placeholder="Search an Athens address"
+            placeholder="e.g. Syntagma Square"
             autocomplete="street-address"
+            aria-describedby="address-search-help"
           />
           <button id="address-go" type="submit">Go</button>
         </form>
 
-        <p class="helper-text">
-          Search for one address, postcode or landmark at a time. Results are
-          restricted to the Athens study area.
+        <p id="address-search-help" class="helper-text">
+          Search for one address, postcode, district or landmark at a time.
+          Results are restricted to Greater Athens.
         </p>
       </section>
 

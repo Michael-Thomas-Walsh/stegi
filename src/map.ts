@@ -345,10 +345,14 @@ export function goToLocation(
   map.flyTo([lat, lng], 18, { duration: 0.8 })
 }
 
-export function clearMap(): void {
-  clearStudyArea()
+export function clearLocationMarker(): void {
   locationMarker?.remove()
   locationMarker = null
+}
+
+export function clearMap(): void {
+  clearStudyArea()
+  clearLocationMarker()
 }
 
 export function clearRooftops(): void {

@@ -880,3 +880,90 @@ input[type='search'] {
   line-height: 1.35;
   color: #707871;
 }
+
+
+/* --- Address input guidance tooltip --- */
+.field-label-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.input-tooltip {
+  position: relative;
+  display: inline-grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #777772;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #4f4f4a;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+  user-select: none;
+}
+
+.input-tooltip:hover,
+.input-tooltip:focus-visible {
+  border-color: #212121;
+  background: #ededeb;
+  color: #212121;
+  outline: none;
+}
+
+.input-tooltip:focus-visible {
+  box-shadow: 0 0 0 3px rgb(109 145 61 / 24%);
+}
+
+.input-tooltip-content {
+  position: absolute;
+  z-index: 1500;
+  right: -0.15rem;
+  bottom: calc(100% + 0.55rem);
+  width: min(285px, calc(100vw - 2rem));
+  padding: 0.7rem 0.75rem;
+  border: 1px solid #bdbdb7;
+  border-radius: 9px;
+  background: #272823;
+  color: #ffffff;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 22%);
+  font-size: 0.75rem;
+  font-weight: 450;
+  line-height: 1.45;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0.3rem);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.input-tooltip-content::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 0.55rem;
+  border: 0.42rem solid transparent;
+  border-top-color: #272823;
+}
+
+.input-tooltip:hover .input-tooltip-content,
+.input-tooltip:focus .input-tooltip-content,
+.input-tooltip:focus-within .input-tooltip-content {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.input-tooltip-content strong {
+  color: #bfe48f;
+  font-weight: 700;
+}
